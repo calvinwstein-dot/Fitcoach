@@ -1,0 +1,4 @@
+ports:
+  - port: 8787
+    visibility: public
+    onOpen: open-browser

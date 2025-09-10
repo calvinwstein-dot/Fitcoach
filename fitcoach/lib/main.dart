@@ -39,11 +39,9 @@ class CoachScreen extends StatefulWidget {
 }
 
 class _CoachScreenState extends State<CoachScreen> {
-  String _serverUrl = 'https://api.elevenlabs.io/v1/text-to-speech/';
-  String _elevenLabsApiKey = 'sk_320f8a8f6666297cb40a34ac3be695ac7c330b7d79cb3d44';
+  String _serverUrl = '';
 
   final TextEditingController _serverCtrl = TextEditingController();
-  final TextEditingController _apiKeyCtrl = TextEditingController();
   final AudioPlayer _player = AudioPlayer();
   final Random _rng = Random();
 
@@ -86,7 +84,6 @@ class _CoachScreenState extends State<CoachScreen> {
     _ticker?.cancel();
     _player.dispose();
     _serverCtrl.dispose();
-    _apiKeyCtrl.dispose();
     super.dispose();
   }
 
@@ -94,14 +91,12 @@ class _CoachScreenState extends State<CoachScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('server_url', _serverUrl);
     await prefs.setString('selected_voice', _selectedVoice);
-    await prefs.setString('elevenlabs_api_key', _elevenLabsApiKey);
   }
 
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     final savedUrl = prefs.getString('server_url');
     final savedVoice = prefs.getString('selected_voice');
-    final savedApiKey = prefs.getString('elevenlabs_api_key');
     
     if (savedUrl != null) {
       setState(() {
@@ -115,68 +110,41 @@ class _CoachScreenState extends State<CoachScreen> {
         _selectedVoice = savedVoice;
       });
     }
-    
-    if (savedApiKey != null) {
-      setState(() {
-        _elevenLabsApiKey = savedApiKey;
-        _apiKeyCtrl.text = savedApiKey;
-      });
-    } else {
-      // Set default API key
-      _apiKeyCtrl.text = _elevenLabsApiKey;
-    }
   }
 
   Future<void> _speak(String text) async {
-    // Try ElevenLabs API first if API key is provided
-    if (_elevenLabsApiKey.isNotEmpty) {
+    // Try TTS server if URL is provided
+    if (_serverUrl.isNotEmpty) {
       try {
-        final response = await http.post(
-          Uri.parse('$_serverUrl$_selectedVoice'),
-          headers: {
-            'Accept': 'audio/mpeg',
-            'Content-Type': 'application/json',
-            'xi-api-key': _elevenLabsApiKey,
-          },
-          body: jsonEncode({
-            'text': text,
-            'model_id': 'eleven_multilingual_v2',
-            'voice_settings': {
-              'stability': 0.75,
-              'similarity_boost': 0.85,
-              'style': 0.2,
-              'use_speaker_boost': true
-            }
-          }),
-        );
-
-        if (response.statusCode == 200) {
-          // Create blob URL for audio playback
-          final audioBytes = response.bodyBytes;
-          final blob = html.Blob([audioBytes], 'audio/mpeg');
-          final url = html.Url.createObjectUrlFromBlob(blob);
-          
-          final audioElement = html.AudioElement(url);
-          await audioElement.play();
-          
-          // Clean up
-          html.Url.revokeObjectUrl(url);
-          
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('🔊 ElevenLabs ${_voices[_selectedVoice]}: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
-                backgroundColor: Colors.green.withOpacity(0.8),
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          }
-          return;
-        } else {
-          print('ElevenLabs API error: ${response.statusCode} - ${response.body}');
+        final uri = Uri.parse('$_serverUrl/tts?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice');
+        
+        print('🔊 Attempting TTS: $uri');
+        
+        // Use AudioPlayer for better web compatibility
+        await _player.stop();
+        await _player.play(UrlSource(uri.toString()));
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('🔊 ElevenLabs ${_voices[_selectedVoice]}: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
+              backgroundColor: Colors.green.withOpacity(0.8),
+              duration: const Duration(seconds: 2),
+            ),
+          );
         }
+        return;
       } catch (e) {
-        print('ElevenLabs API failed: $e');
+        print('TTS Server failed: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('⚠️ TTS server failed, using browser TTS'),
+              backgroundColor: Colors.orange.withOpacity(0.8),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
       }
     }
     
@@ -513,16 +481,15 @@ class _CoachScreenState extends State<CoachScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    const Text('ElevenLabs API Key', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70)),
+                    const Text('TTS Server URL', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70)),
                     const SizedBox(height: 8),
                     TextField(
-                      controller: _apiKeyCtrl,
+                      controller: _serverCtrl,
                       style: const TextStyle(color: Colors.white),
-                      obscureText: true,
                       decoration: InputDecoration(
-                        hintText: 'Enter your ElevenLabs API key',
+                        hintText: 'Enter TTS server URL (e.g., your Replit URL)',
                         hintStyle: const TextStyle(color: Colors.white54),
-                        helperText: 'Required for realistic ElevenLabs voices',
+                        helperText: 'Server with ElevenLabs integration',
                         helperStyle: const TextStyle(color: Colors.white38, fontSize: 12),
                         filled: true,
                         fillColor: Colors.white.withOpacity(0.1),
@@ -612,18 +579,16 @@ class _CoachScreenState extends State<CoachScreen> {
                               final prefs = await SharedPreferences.getInstance();
                               await prefs.setString('server_url', _serverCtrl.text);
                               await prefs.setString('selected_voice', _selectedVoice);
-                              await prefs.setString('elevenlabs_api_key', _apiKeyCtrl.text);
                               setState(() {
                                 _serverUrl = _serverCtrl.text;
-                                _elevenLabsApiKey = _apiKeyCtrl.text;
                               });
                               Navigator.of(context).pop();
                               
                               // Show confirmation
-                              final hasApiKey = _apiKeyCtrl.text.isNotEmpty;
+                              final hasServer = _serverCtrl.text.isNotEmpty;
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text('✅ Settings saved! Voice: ${_voices[_selectedVoice]} ${hasApiKey ? "(ElevenLabs)" : "(Browser TTS)"}'),
+                                  content: Text('✅ Settings saved! Voice: ${_voices[_selectedVoice]} ${hasServer ? "(ElevenLabs Server)" : "(Browser TTS)"}'),
                                   backgroundColor: Colors.green.withOpacity(0.8),
                                   duration: const Duration(seconds: 2),
                                 ),

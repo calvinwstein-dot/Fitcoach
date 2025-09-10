@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  REPO_NAME: Fitcoach      # <-- your repo name (case-sensitive)
-  WORKDIR: fitcoach        # <-- folder that contains pubspec.yaml
+  REPO_NAME: Fitcoach      # your repo name (case-sensitive)
+  WORKDIR: fitcoach        # folder that contains pubspec.yaml
 
 jobs:
   build:
@@ -24,20 +24,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show tree (debug)
-        run: |
-          pwd
-          ls -la
-          echo "---- inside $WORKDIR ----"
-          ls -la "$WORKDIR"
-
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-
-      - name: Flutter doctor (debug)
-        run: flutter doctor -v
 
       - name: Install dependencies
         working-directory: ${{ env.WORKDIR }}

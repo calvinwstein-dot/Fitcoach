@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() => runApp(const FitCoachApp());
 
@@ -36,8 +37,9 @@ class CoachScreen extends StatefulWidget {
 
 class _CoachScreenState extends State<CoachScreen> {
   // TODO: replace with your real Replit URL (no trailing slash)
-  static const String _serverUrl = 'https://63d0b674-9d16-478b-a272-e0513423bcfb-00-1pmi0mctu0qbh.janeway.replit.dev/';
+  String _serverUrl = 'https://63d0b674-9d16-478b-a272-e0513423bcfb-00-1pmi0mctu0qbh.janeway.replit.dev/';
 
+  final TextEditingController _serverCtrl = TextEditingController();
   final AudioPlayer _player = AudioPlayer();
   final Random _rng = Random();
 
@@ -53,6 +55,8 @@ class _CoachScreenState extends State<CoachScreen> {
   @override
   void initState() {
     super.initState();
+    _serverCtrl.text = _serverUrl;
+    _loadPreferences();
     _start = DateTime.now();
     _ticker = Timer.periodic(const Duration(seconds: 2), (_) => _simulateTick());
   }
@@ -61,7 +65,24 @@ class _CoachScreenState extends State<CoachScreen> {
   void dispose() {
     _ticker?.cancel();
     _player.dispose();
+    _serverCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _savePreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('server_url', _serverUrl);
+  }
+
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedUrl = prefs.getString('server_url');
+    if (savedUrl != null) {
+      setState(() {
+        _serverUrl = savedUrl;
+        _serverCtrl.text = savedUrl;
+      });
+    }
   }
 
   Future<void> _speak(String text) async {
@@ -308,6 +329,35 @@ class _CoachScreenState extends State<CoachScreen> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white24),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Server Configuration",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _serverCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'TTS Server URL',
+                      hintText: 'Enter your server URL',
+                      border: OutlineInputBorder(),
+                    ),
+                    onSubmitted: (value) async {
+                      _serverUrl = value.trim();
+                      await _savePreferences();
+                    },
+                  ),
+                ],
+              ),
             ),
           ],
         ),

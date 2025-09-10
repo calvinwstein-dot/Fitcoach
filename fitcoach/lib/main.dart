@@ -40,7 +40,7 @@ class CoachScreen extends StatefulWidget {
 
 class _CoachScreenState extends State<CoachScreen> {
   String _serverUrl = 'https://api.elevenlabs.io/v1/text-to-speech/';
-  String _elevenLabsApiKey = '';
+  String _elevenLabsApiKey = 'sk_320f8a8f6666297cb40a34ac3be695ac7c330b7d79cb3d44';
 
   final TextEditingController _serverCtrl = TextEditingController();
   final TextEditingController _apiKeyCtrl = TextEditingController();
@@ -121,6 +121,9 @@ class _CoachScreenState extends State<CoachScreen> {
         _elevenLabsApiKey = savedApiKey;
         _apiKeyCtrl.text = savedApiKey;
       });
+    } else {
+      // Set default API key
+      _apiKeyCtrl.text = _elevenLabsApiKey;
     }
   }
 

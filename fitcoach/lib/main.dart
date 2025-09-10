@@ -1,10 +1,14 @@
 // lib/main.dart
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
 import 'dart:html' as html;
 
 void main() => runApp(const FitCoachApp());
@@ -94,30 +98,52 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
   Future<void> _savePreferences() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('server_url', _serverUrl);
+    await prefs.setString('selected_voice', _selectedVoice);
   }
 
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     final savedUrl = prefs.getString('server_url');
+    final savedVoice = prefs.getString('selected_voice');
+    
     if (savedUrl != null) {
       setState(() {
         _serverUrl = savedUrl;
         _serverCtrl.text = savedUrl;
       });
     }
+    
+    if (savedVoice != null && _voices.containsKey(savedVoice)) {
+      setState(() {
+        _selectedVoice = savedVoice;
+      });
+    }
   }
 
   Future<void> _speak(String text) async {
     try {
-      // First try the TTS server if URL is configured
-      if (_serverUrl.isNotEmpty && _serverUrl != 'https://63d0b674-9d16-478b-a272-e0513423bcfb-00-1pmi0mctu0qbh.janeway.replit.dev/') {
-        final uri = Uri.parse('$_serverUrl/tts?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice');
+      // Always try ElevenLabs TTS first for realistic human voices
+      if (_serverUrl.isNotEmpty) {
+        // Use the selected voice ID directly in the URL for ElevenLabs API
+        final uri = Uri.parse('$_serverUrl/tts?text=${Uri.encodeComponent(text)}&voice_id=$_selectedVoice&model_id=eleven_multilingual_v2&stability=0.75&similarity_boost=0.85&style=0.2&use_speaker_boost=true');
+        
         await _player.stop();
         await _player.play(UrlSource(uri.toString()));
+        
+        // Show success feedback with voice name
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('🔊 ${_voices[_selectedVoice]}: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
+              backgroundColor: Colors.green.withOpacity(0.8),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
         return;
       }
     } catch (e) {
-      print('TTS Server failed: $e');
+      print('ElevenLabs TTS failed: $e');
     }
     
     // Fallback to browser's built-in speech synthesis
@@ -425,7 +451,7 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
                             child: Text(entry.value, style: const TextStyle(color: Colors.white)),
                           );
                         }).toList(),
-                        onChanged: (String? newValue) {
+                        onChanged: (String? newValue) async {
                           if (newValue != null) {
                             setDialogState(() {
                               _selectedVoice = newValue;
@@ -433,6 +459,13 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
                             setState(() {
                               _selectedVoice = newValue;
                             });
+                            
+                            // Immediately save the voice selection
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setString('selected_voice', newValue);
+                            
+                            // Test the new voice
+                            await _speak("Voice changed to ${_voices[newValue]}. This is how I sound!");
                           }
                         },
                       ),
@@ -481,10 +514,20 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
                             onPressed: () async {
                               final prefs = await SharedPreferences.getInstance();
                               await prefs.setString('server_url', _serverCtrl.text);
+                              await prefs.setString('selected_voice', _selectedVoice);
                               setState(() {
                                 _serverUrl = _serverCtrl.text;
                               });
                               Navigator.of(context).pop();
+                              
+                              // Show confirmation
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('✅ Settings saved! Voice: ${_voices[_selectedVoice]}'),
+                                  backgroundColor: Colors.green.withOpacity(0.8),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.blue.withOpacity(0.2),

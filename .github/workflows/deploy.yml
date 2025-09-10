@@ -1,21 +1,11 @@
-name: Build & Deploy Flutter Web (Pages)
+name: Build & Deploy Flutter Web
 
 on:
   push:
     branches: [ main ]
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
-
-env:
-  REPO_NAME: Fitcoach      # your repo name (case-sensitive)
-  WORKDIR: fitcoach        # folder that contains pubspec.yaml
+  contents: write
 
 jobs:
   build:
@@ -30,25 +20,15 @@ jobs:
           channel: stable
 
       - name: Install dependencies
-        working-directory: ${{ env.WORKDIR }}
+        working-directory: fitcoach
         run: flutter pub get
 
       - name: Build web (release)
-        working-directory: ${{ env.WORKDIR }}
-        run: flutter build web --release --base-href "/${{ env.REPO_NAME }}/"
+        working-directory: fitcoach
+        run: flutter build web --release --base-href "/Fitcoach/"
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ${{ env.WORKDIR }}/build/web
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
       - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: fitcoach/build/web

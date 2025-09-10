@@ -119,76 +119,20 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
   }
 
   Future<void> _speak(String text) async {
-    try {
-      // Try ElevenLabs TTS server first
-      if (_serverUrl.isNotEmpty) {
-        final uri = Uri.parse('$_serverUrl/tts?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice');
-        
-        print('🔊 Attempting ElevenLabs TTS: $uri');
-        
-        // Stop any current playback
-        await _player.stop();
-        
-        // Set player mode for web streaming
-        await _player.setReleaseMode(ReleaseMode.stop);
-        await _player.setPlayerMode(PlayerMode.mediaPlayer);
-        
-        // Try HTML5 audio first for better web compatibility
-        try {
-          final audioElement = html.AudioElement(uri.toString());
-          audioElement.crossOrigin = 'anonymous';
-          audioElement.preload = 'auto';
-          
-          // Wait for audio to load
-          await audioElement.onCanPlay.first.timeout(const Duration(seconds: 5));
-          
-          // Play the audio
-          await audioElement.play();
-          
-          print('✅ HTML5 audio playing successfully');
-        } catch (htmlError) {
-          print('⚠️ HTML5 audio failed: $htmlError, trying AudioPlayer...');
-          
-          // Fallback to AudioPlayer
-          await _player.play(UrlSource(uri.toString()));
-          print('🎵 AudioPlayer fallback used');
-        }
-        
-        // Show success feedback
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('🔊 ElevenLabs ${_voices[_selectedVoice]}: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
-              backgroundColor: Colors.green.withOpacity(0.8),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
-        return;
-      }
-    } catch (e) {
-      print('❌ ElevenLabs TTS failed: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('⚠️ ElevenLabs failed: $e. Using browser TTS...'),
-            backgroundColor: Colors.orange.withOpacity(0.8),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-    }
+    // Since the original ElevenLabs server is down, use enhanced browser TTS
+    // with voice mapping to provide the most realistic experience possible
     
-    // Fallback to browser's built-in speech synthesis
+    print('🔊 Speaking with enhanced browser TTS: "$text"');
+    print('🎭 Selected voice: ${_voices[_selectedVoice]} ($_selectedVoice)');
+    
     try {
-      print('🔄 Falling back to browser TTS');
       await _speakWithBrowserTTS(text);
     } catch (e) {
-      print('❌ Browser TTS failed: $e');
+      print('❌ Enhanced browser TTS failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ All audio failed: $e'),
+            content: Text('❌ Speech synthesis failed: $e'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 2),
           ),
@@ -199,65 +143,20 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
 
   Future<void> _testAudio() async {
     try {
-      // First test ElevenLabs server connection
-      if (_serverUrl.isNotEmpty) {
-        final testUri = Uri.parse('$_serverUrl/tts?text=${Uri.encodeComponent("Testing ElevenLabs connection with ${_voices[_selectedVoice]} voice")}&voice=$_selectedVoice');
-        
-        print('Testing ElevenLabs with: $testUri');
-        
-        // Test with HTML5 audio for better web compatibility
-        try {
-          final audioElement = html.AudioElement(testUri.toString());
-          audioElement.crossOrigin = 'anonymous';
-          audioElement.preload = 'auto';
-          
-          await audioElement.onCanPlay.first.timeout(const Duration(seconds: 5));
-          await audioElement.play();
-          
-          print('✅ ElevenLabs test successful with HTML5 audio');
-        } catch (htmlError) {
-          print('⚠️ HTML5 test failed: $htmlError, trying AudioPlayer...');
-          await _player.stop();
-          await _player.play(UrlSource(testUri.toString()));
-        }
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✅ ElevenLabs ${_voices[_selectedVoice]} voice test successful!'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        }
-        return;
-      }
-    } catch (e) {
-      print('ElevenLabs test failed: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('⚠️ ElevenLabs server unavailable. Testing browser TTS...'),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-    }
-    
-    // Fallback to browser TTS test
-    try {
+      // Test enhanced browser TTS with voice mapping
       if (html.window.speechSynthesis != null) {
         final voices = html.window.speechSynthesis!.getVoices();
         final englishVoices = voices.where((v) => v.lang?.startsWith('en') == true).length;
         
-        await _speakWithBrowserTTS("Browser TTS test successful! Found $englishVoices English voices available.");
+        final testMessage = "Testing ${_voices[_selectedVoice]} voice. This is how I sound with enhanced browser TTS!";
+        
+        await _speakWithBrowserTTS(testMessage);
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('✅ Browser TTS working! Found $englishVoices English voices.'),
-              backgroundColor: Colors.blue,
+              content: Text('✅ Enhanced ${_voices[_selectedVoice]} voice test successful! ($englishVoices voices available)'),
+              backgroundColor: Colors.green,
               duration: const Duration(seconds: 3),
             ),
           );
@@ -279,52 +178,93 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
   }
 
   Future<void> _speakWithBrowserTTS(String text) async {
-    // Use browser's built-in speech synthesis
-    if (html.window.navigator.userAgent.contains('Chrome') || 
-        html.window.navigator.userAgent.contains('Firefox') ||
-        html.window.navigator.userAgent.contains('Safari')) {
+    // Enhanced browser TTS with premium voice selection
+    if (html.window.speechSynthesis != null) {
       
       // Cancel any ongoing speech
-      html.window.speechSynthesis?.cancel();
+      html.window.speechSynthesis!.cancel();
       
-      // Create speech utterance
-      final utterance = html.SpeechSynthesisUtterance(text);
-      utterance.rate = 0.9;
-      utterance.pitch = 1.0;
-      utterance.volume = 0.8;
+      // Wait for voices to load
+      await Future.delayed(const Duration(milliseconds: 100));
       
       // Get available voices
-      final voices = html.window.speechSynthesis?.getVoices() ?? [];
+      final voices = html.window.speechSynthesis!.getVoices();
       
-      // Try to find a good English voice
+      // Premium voice selection based on selected ElevenLabs voice
       html.SpeechSynthesisVoice? selectedVoice;
-      for (final voice in voices) {
-        if (voice.lang?.startsWith('en') == true) {
-          if (voice.name?.contains('Google') == true || 
-              voice.name?.contains('Microsoft') == true || 
-              voice.name?.contains('Alex') == true ||
-              voice.name?.contains('Samantha') == true) {
+      String voiceName = _voices[_selectedVoice] ?? 'Default';
+      
+      // Map ElevenLabs voices to best browser equivalents
+      final voicePreferences = {
+        '21m00Tcm4TlvDq8ikWAM': ['Google US English', 'Microsoft Zira', 'Samantha', 'Alex'], // Rachel
+        'AZnzlk1XvdvUeBnXmlld': ['Google UK English Female', 'Microsoft Hazel', 'Victoria'], // Domi
+        'EXAVITQu4vr4xnSDxMaL': ['Microsoft Aria', 'Google US English', 'Samantha'], // Bella
+        'ErXwobaYiN019PkySvjV': ['Microsoft David', 'Google UK English Male', 'Alex'], // Antoni
+        'MF3mGyEYCl7XYWbV9V6O': ['Microsoft Jenny', 'Google US English', 'Victoria'], // Elli
+        'TxGEqnHWrfWFTfGW9XjX': ['Microsoft Guy', 'Google UK English Male', 'Daniel'], // Josh
+        'VR6AewLTigWG4xSOukaG': ['Microsoft Mark', 'Google US English', 'Alex'], // Arnold
+        'pNInz6obpgDQGcFmaJgB': ['Microsoft Ryan', 'Google UK English Male', 'Daniel'], // Adam
+        'yoZ06aMxZJJ28mfd3POQ': ['Microsoft Brandon', 'Google US English', 'Alex'], // Sam
+      };
+      
+      final preferences = voicePreferences[_selectedVoice] ?? ['Google US English', 'Microsoft Zira', 'Alex'];
+      
+      // Find the best matching voice
+      for (final preference in preferences) {
+        for (final voice in voices) {
+          if (voice.name?.contains(preference) == true && voice.lang?.startsWith('en') == true) {
             selectedVoice = voice;
             break;
           }
-          selectedVoice ??= voice; // Fallback to first English voice
+        }
+        if (selectedVoice != null) break;
+      }
+      
+      // Fallback to any good English voice
+      if (selectedVoice == null) {
+        for (final voice in voices) {
+          if (voice.lang?.startsWith('en') == true) {
+            if (voice.name?.contains('Google') == true || 
+                voice.name?.contains('Microsoft') == true || 
+                voice.name?.contains('Natural') == true ||
+                voice.name?.contains('Premium') == true) {
+              selectedVoice = voice;
+              break;
+            }
+          }
         }
       }
+      
+      // Final fallback
+      if (selectedVoice == null && voices.isNotEmpty) {
+        selectedVoice = voices.firstWhere(
+          (v) => v.lang?.startsWith('en') == true,
+          orElse: () => voices.first,
+        );
+      }
+      
+      // Create enhanced utterance
+      final utterance = html.SpeechSynthesisUtterance(text);
+      
+      // Enhanced settings for more natural speech
+      utterance.rate = 0.85;     // Slightly slower for clarity
+      utterance.pitch = 1.1;     // Slightly higher for engagement
+      utterance.volume = 0.9;    // Higher volume
       
       if (selectedVoice != null) {
         utterance.voice = selectedVoice;
       }
       
       // Speak the text
-      html.window.speechSynthesis?.speak(utterance);
+      html.window.speechSynthesis!.speak(utterance);
       
-      // Show feedback to user
+      // Show enhanced feedback
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('🔊 Speaking: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
-            backgroundColor: Colors.green.withOpacity(0.8),
-            duration: const Duration(seconds: 1),
+            content: Text('🔊 Browser TTS ($voiceName): "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
+            backgroundColor: Colors.blue.withOpacity(0.8),
+            duration: const Duration(seconds: 2),
           ),
         );
       }

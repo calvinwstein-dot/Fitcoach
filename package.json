@@ -1,0 +1,21 @@
+{
+  "name": "elevenlabs-tts-server",
+  "version": "1.0.0",
+  "description": "ElevenLabs v3 TTS Server with Ultra High Quality Voices",
+  "main": "elevenlabs-server.js",
+  "scripts": {
+    "start": "node elevenlabs-server.js",
+    "dev": "nodemon elevenlabs-server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "node-fetch": "^2.6.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

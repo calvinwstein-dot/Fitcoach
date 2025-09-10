@@ -39,7 +39,7 @@ class CoachScreen extends StatefulWidget {
 }
 
 class _CoachScreenState extends State<CoachScreen> {
-  String _serverUrl = 'https://elevenlabs-tts-server.replit.app';
+  String _serverUrl = 'https://63d0b674-9d16-478b-a272-e0513423bcfb-00-1pmi0mctu0qbh.janeway.replit.dev';
 
   final TextEditingController _serverCtrl = TextEditingController();
   final AudioPlayer _player = AudioPlayer();
@@ -116,6 +116,10 @@ class _CoachScreenState extends State<CoachScreen> {
   }
 
   Future<void> _speak(String text) async {
+    print('🎤 _speak called with text: "$text"');
+    print('🌐 Server URL: $_serverUrl');
+    print('🎵 Selected voice: $_selectedVoice');
+    
     // Try TTS server if URL is provided
     if (_serverUrl.isNotEmpty) {
       try {
@@ -123,20 +127,79 @@ class _CoachScreenState extends State<CoachScreen> {
         
         print('🔊 Attempting TTS: $uri');
         
-        // Try multiple audio approaches for better web compatibility
+        // Test server connectivity first
         try {
-          // Method 1: HTML5 Audio Element (most reliable for web)
+          print('🔍 Testing server connectivity...');
+          final response = await http.get(Uri.parse(_serverUrl)).timeout(const Duration(seconds: 5));
+          print('📡 Server response: ${response.statusCode}');
+          if (response.statusCode != 200) {
+            throw Exception('Server returned ${response.statusCode}');
+          }
+        } catch (connectError) {
+          print('❌ Server connectivity failed: $connectError');
+          throw connectError;
+        }
+        
+        // Try HTML5 Audio Element first
+        try {
+          print('🎵 Creating HTML5 Audio Element...');
           final audioElement = html.AudioElement();
-          audioElement.src = uri.toString();
           audioElement.crossOrigin = 'anonymous';
+          audioElement.preload = 'auto';
           
-          // Wait for audio to load
-          await audioElement.onCanPlay.first.timeout(const Duration(seconds: 10));
+          // Set up comprehensive event listeners
+          bool audioLoaded = false;
+          bool audioError = false;
+          String errorMessage = '';
           
-          // Play the audio
-          await audioElement.play();
+          audioElement.onCanPlay.listen((_) {
+            print('🎵 HTML5: Can play');
+            audioLoaded = true;
+          });
           
-          print('✅ HTML5 audio playing successfully');
+          audioElement.onEnded.listen((_) {
+            print('🎵 HTML5: Finished playing');
+          });
+          
+          audioElement.onError.listen((event) {
+            audioError = true;
+            errorMessage = 'HTML5 Audio Error: ${audioElement.error?.message ?? "Unknown error"}';
+            print('❌ $errorMessage');
+          });
+          
+          // Set source and try to play immediately
+          print('🎵 Setting audio source...');
+          audioElement.src = uri.toString();
+          
+          // Try direct play first (works if user has interacted)
+          try {
+            print('▶️ Attempting immediate play...');
+            await audioElement.play();
+            print('✅ Immediate play successful');
+          } catch (playError) {
+            print('⏳ Immediate play failed, waiting for canplay event...');
+            
+            // Wait for audio to be ready
+            int attempts = 0;
+            while (!audioLoaded && !audioError && attempts < 30) {
+              await Future.delayed(const Duration(milliseconds: 200));
+              attempts++;
+            }
+            
+            if (audioError) {
+              throw Exception(errorMessage);
+            }
+            
+            if (!audioLoaded) {
+              throw Exception('Audio load timeout after 6 seconds');
+            }
+            
+            // Play the audio after loading
+            print('▶️ Playing HTML5 audio after load...');
+            await audioElement.play();
+          }
+          
+          print('✅ HTML5 audio started successfully');
           
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -150,26 +213,36 @@ class _CoachScreenState extends State<CoachScreen> {
           return;
           
         } catch (htmlError) {
-          print('HTML5 audio failed: $htmlError, trying AudioPlayer...');
+          print('❌ HTML5 audio failed: $htmlError');
+          print('🔄 Trying AudioPlayer fallback...');
           
           // Method 2: AudioPlayer fallback
-          await _player.stop();
-          await _player.play(UrlSource(uri.toString()));
-          
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('🔊 ElevenLabs ${_voices[_selectedVoice]}: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
-                backgroundColor: Colors.green.withOpacity(0.8),
-                duration: const Duration(seconds: 2),
-              ),
-            );
+          try {
+            await _player.stop();
+            print('🎵 AudioPlayer: Playing URL...');
+            await _player.play(UrlSource(uri.toString()));
+            
+            print('✅ AudioPlayer started successfully');
+            
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('🔊 ElevenLabs ${_voices[_selectedVoice]}: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
+                  backgroundColor: Colors.green.withOpacity(0.8),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            }
+            return;
+            
+          } catch (audioPlayerError) {
+            print('❌ AudioPlayer also failed: $audioPlayerError');
+            throw audioPlayerError;
           }
-          return;
         }
         
       } catch (e) {
-        print('TTS Server failed: $e');
+        print('❌ TTS Server failed: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -183,10 +256,11 @@ class _CoachScreenState extends State<CoachScreen> {
     }
     
     // Fallback to enhanced browser TTS
+    print('🔄 Falling back to browser TTS...');
     try {
       await _speakWithBrowserTTS(text);
     } catch (e) {
-      print('❌ Speech synthesis failed: $e');
+      print('❌ Browser TTS also failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -603,6 +677,53 @@ class _CoachScreenState extends State<CoachScreen> {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Direct Audio Test', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70)),
+                    const SizedBox(height: 8),
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        // Ultra-simple direct test bypassing all Flutter logic
+                        final testUrl = 'https://63d0b674-9d16-478b-a272-e0513423bcfb-00-1pmi0mctu0qbh.janeway.replit.dev/tts?text=Direct%20test&voice=21m00Tcm4TlvDq8ikWAM';
+                        print('🧪 DIRECT TEST: $testUrl');
+                        
+                        try {
+                          // Create audio element and play immediately
+                          final audio = html.AudioElement(testUrl);
+                          audio.crossOrigin = 'anonymous';
+                          
+                          // Just play - no waiting
+                          audio.play();
+                          print('🧪 Direct play() called');
+                          
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('🧪 Direct test - check console and listen for audio'),
+                                backgroundColor: Colors.purple,
+                                duration: Duration(seconds: 3),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          print('🧪 Direct test FAILED: $e');
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('🧪 Direct test failed: $e'),
+                                backgroundColor: Colors.red,
+                                duration: const Duration(seconds: 3),
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.play_arrow, size: 16),
+                      label: const Text('Direct Test'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple.withOpacity(0.2),
+                        foregroundColor: Colors.purpleAccent,
+                      ),
                     ),
                     const SizedBox(height: 20),
                     Row(

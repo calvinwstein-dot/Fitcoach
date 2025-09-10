@@ -1,0 +1,558 @@
+// lib/main.dart
+import 'dart:async';
+import 'dart:math';
+import 'package:flutter/material.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+void main() => runApp(const FitCoachApp());
+
+class FitCoachApp extends StatelessWidget {
+  const FitCoachApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'FitCoach AI',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          brightness: Brightness.dark,
+          seedColor: const Color(0xFF66C3FF),
+        ),
+        textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
+        useMaterial3: true,
+      ),
+      home: const CoachScreen(),
+    );
+  }
+}
+
+class CoachScreen extends StatefulWidget {
+  const CoachScreen({super.key});
+  @override
+  State<CoachScreen> createState() => _CoachScreenState();
+}
+
+class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin {
+  String _serverUrl = 'https://63d0b674-9d16-478b-a272-e0513423bcfb-00-1pmi0mctu0qbh.janeway.replit.dev/';
+
+  final TextEditingController _serverCtrl = TextEditingController();
+  final AudioPlayer _player = AudioPlayer();
+  final Random _rng = Random();
+
+  int heartRate = 140;
+  double distanceKm = 2.7;
+  double paceMinPerKm = 4.9;
+  late DateTime _start;
+  Timer? _ticker;
+
+  final double goalDistanceKm = 5.0;
+  final int goalTimeSec = 25 * 60;
+
+  // Tab controller
+  late TabController _tabController;
+  int _caloriesBurned = 0;
+  final int _dailyCalorieGoal = 2500;
+  final int _caloriesConsumed = 1200;
+
+  // Voice selection
+  String _selectedVoice = "21m00Tcm4TlvDq8ikWAM";
+  final Map<String, String> _voices = {
+    "21m00Tcm4TlvDq8ikWAM": "Rachel (Default)",
+    "AZnzlk1XvdvUeBnXmlld": "Domi",
+    "EXAVITQu4vr4xnSDxMaL": "Bella",
+    "ErXwobaYiN019PkySvjV": "Antoni",
+    "MF3mGyEYCl7XYWbV9V6O": "Elli",
+    "TxGEqnHWrfWFTfGW9XjX": "Josh",
+    "VR6AewLTigWG4xSOukaG": "Arnold",
+    "pNInz6obpgDQGcFmaJgB": "Adam",
+    "yoZ06aMxZJJ28mfd3POQ": "Sam",
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _serverCtrl.text = _serverUrl;
+    _loadPreferences();
+    _start = DateTime.now();
+    _ticker = Timer.periodic(const Duration(seconds: 2), (_) => _simulateTick());
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    _player.dispose();
+    _serverCtrl.dispose();
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _savePreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('server_url', _serverUrl);
+  }
+
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedUrl = prefs.getString('server_url');
+    if (savedUrl != null) {
+      setState(() {
+        _serverUrl = savedUrl;
+        _serverCtrl.text = savedUrl;
+      });
+    }
+  }
+
+  Future<void> _speak(String text) async {
+    final uri = Uri.parse('$_serverUrl/tts?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice');
+    try {
+      await _player.stop();
+      await _player.play(UrlSource(uri.toString()));
+    } catch (_) {
+      // ignore playback errors in demo
+    }
+  }
+
+  void _autoCue() {
+    const int maxHr = 190;
+    final bool high = heartRate > (0.90 * maxHr);
+    final bool low = heartRate < (0.72 * maxHr);
+    final int elapsedSec = DateTime.now().difference(_start).inSeconds;
+    final bool onPace =
+        (elapsedSec / goalTimeSec) <= (distanceKm / goalDistanceKm) + 0.03;
+
+    String line;
+    if (high) {
+      line = "Ease it back a touch. Breathe, relax your shoulders—let's keep it controlled.";
+    } else if (low && !onPace) {
+      line = "You've got more in you. Lift the knees, quicken the turnover—let's nudge the pace.";
+    } else {
+      final double remain = (goalDistanceKm - distanceKm).clamp(0.0, goalDistanceKm);
+      if (remain <= 1.0) {
+        line = "Final push! Less than a kilometer to go. Tall posture, strong finish—go!";
+      } else if (onPace) {
+        line = "Perfect rhythm. You're right on target—keep this smooth cadence.";
+      } else {
+        line = "Good work—lock into your breathing and settle into your best sustainable pace.";
+      }
+    }
+    _speak(line);
+  }
+
+  void _simulateTick() {
+    setState(() {
+      heartRate = (heartRate + _rng.nextInt(5) - 2).clamp(110, 185);
+      distanceKm += (paceMinPerKm <= 5.2 ? 0.02 : 0.015);
+      paceMinPerKm = (paceMinPerKm + (_rng.nextDouble() - 0.5) * 0.06).clamp(4.2, 6.0);
+      
+      // Calculate calories burned
+      final int elapsedMinutes = DateTime.now().difference(_start).inMinutes;
+      _caloriesBurned = (elapsedMinutes * (heartRate / 150) * 8).round();
+      
+      if (_rng.nextDouble() < 0.35) _autoCue();
+    });
+  }
+
+  String _elapsedString() {
+    final int sec = DateTime.now().difference(_start).inSeconds;
+    final String m = (sec ~/ 60).toString().padLeft(2, '0');
+    final String s = (sec % 60).toString().padLeft(2, '0');
+    return "$m:$s";
+  }
+
+  Widget _metricCard({
+    required IconData icon,
+    required String title,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 28, color: color),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 13, color: Colors.white70)),
+                const SizedBox(height: 4),
+                Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.black.withOpacity(0.2),
+        titleSpacing: 12,
+        title: Row(
+          children: [
+            const CircleAvatar(
+              radius: 14,
+              backgroundColor: Color(0xFF141922),
+              child: Icon(Icons.fitness_center, size: 16),
+            ),
+            const SizedBox(width: 10),
+            const Text('FitCoach AI'),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.greenAccent.withOpacity(0.4)),
+              ),
+              child: const Row(children: [
+                Icon(Icons.circle, size: 8, color: Colors.greenAccent),
+                SizedBox(width: 6),
+                Text('Running Session Active', style: TextStyle(fontSize: 12)),
+              ]),
+            ),
+          ],
+        ),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(icon: Icon(Icons.directions_run), text: 'Workout'),
+            Tab(icon: Icon(Icons.local_fire_department), text: 'Calories'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildWorkoutTab(),
+          _buildCalorieTab(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWorkoutTab() {
+    final double distPct = (distanceKm / goalDistanceKm).clamp(0.0, 1.0);
+    final double timePct = (DateTime.now().difference(_start).inSeconds / goalTimeSec).clamp(0.0, 1.0);
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: ListView(
+        children: [
+          const SizedBox(height: 6),
+          const Center(
+            child: Column(
+              children: [
+                Text('5K Morning Run', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+                SizedBox(height: 6),
+                Text('Central Park Loop • Goal: Sub 25:00', style: TextStyle(color: Colors.white70)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _metricCard(
+                  icon: Icons.favorite,
+                  title: 'Heart Rate',
+                  value: '$heartRate BPM',
+                  color: Colors.redAccent,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _metricCard(
+                  icon: Icons.social_distance,
+                  title: 'Distance',
+                  value: '${distanceKm.toStringAsFixed(1)} KM',
+                  color: Colors.lightBlueAccent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _metricCard(
+                  icon: Icons.speed,
+                  title: 'Pace',
+                  value: '${paceMinPerKm.toStringAsFixed(2)} MIN/KM',
+                  color: Colors.orangeAccent,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _metricCard(
+                  icon: Icons.timer,
+                  title: 'Time',
+                  value: _elapsedString(),
+                  color: Colors.greenAccent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white24),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Today's Goals", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 12),
+                _goalBar('Distance Goal', '${(distPct * 100).toStringAsFixed(0)}% • ${distanceKm.toStringAsFixed(1)} of $goalDistanceKm km', distPct),
+                const SizedBox(height: 10),
+                _goalBar('Target Time', '${(timePct * 100).toStringAsFixed(0)}% • ${_elapsedString()} of 25:00', timePct),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _speak("Great pace! You're ahead of your target. Keep this rhythm for another kilometer, then we'll push."),
+                  icon: const Icon(Icons.campaign),
+                  label: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Text('Motivate Me!'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _autoCue,
+                  icon: const Icon(Icons.psychology),
+                  label: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Text('Get Advice'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCalorieTab() {
+    final int remainingCalories = (_dailyCalorieGoal - _caloriesConsumed + _caloriesBurned).clamp(0, _dailyCalorieGoal);
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: ListView(
+        children: [
+          const SizedBox(height: 6),
+          const Center(
+            child: Column(
+              children: [
+                Text('Daily Calorie Tracking', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+                SizedBox(height: 6),
+                Text('Monitor your daily calorie balance', style: TextStyle(color: Colors.white70)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _metricCard(
+                  icon: Icons.local_fire_department,
+                  title: 'Burned',
+                  value: '$_caloriesBurned CAL',
+                  color: Colors.orangeAccent,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _metricCard(
+                  icon: Icons.restaurant,
+                  title: 'Consumed',
+                  value: '$_caloriesConsumed CAL',
+                  color: Colors.blueAccent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _metricCard(
+                  icon: Icons.track_changes,
+                  title: 'Remaining',
+                  value: '$remainingCalories CAL',
+                  color: Colors.greenAccent,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _metricCard(
+                  icon: Icons.flag,
+                  title: 'Daily Goal',
+                  value: '$_dailyCalorieGoal CAL',
+                  color: Colors.purpleAccent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white24),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Voice Selection", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: _selectedVoice,
+                  decoration: const InputDecoration(
+                    labelText: 'Coach Voice',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: _voices.entries.map((entry) {
+                    return DropdownMenuItem<String>(
+                      value: entry.key,
+                      child: Text(entry.value),
+                    );
+                  }).toList(),
+                  onChanged: (String? newValue) {
+                    if (newValue != null) {
+                      setState(() {
+                        _selectedVoice = newValue;
+                      });
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                const Text("Test Voice Prompts", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () => _speak("Welcome to FitCoach! Let's get started."),
+                      child: const Text('Welcome'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => _speak("Great pace! Keep this rhythm."),
+                      child: const Text('Motivation'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => _speak("Ease it back a touch. Breathe, relax."),
+                      child: const Text('Slow Down'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => _speak("You've got more in you. Quicken the pace."),
+                      child: const Text('Speed Up'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => _speak("Final push! Strong finish!"),
+                      child: const Text('Final Push'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => _speak("Perfect rhythm. You're on target."),
+                      child: const Text('On Target'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white24),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Server Configuration", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _serverCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'TTS Server URL',
+                    hintText: 'Enter your server URL',
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (value) async {
+                    _serverUrl = value.trim();
+                    await _savePreferences();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _goalBar(String title, String subtitle, double pct) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        Stack(
+          children: [
+            Container(
+              height: 10,
+              decoration: BoxDecoration(
+                color: Colors.white12,
+                borderRadius: BorderRadius.circular(6),
+              ),
+            ),
+            FractionallySizedBox(
+              widthFactor: pct.clamp(0.0, 1.0),
+              child: Container(
+                height: 10,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(6),
+                  gradient: const LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [Color(0xFF1FB7FF), Color(0xFFFFC061)],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(subtitle, style: const TextStyle(color: Colors.white70)),
+      ],
+    );
+  }
+}

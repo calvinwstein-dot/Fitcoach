@@ -40585,7 +40585,7 @@ e=t.N
 d=A.ar(["Accept","audio/mpeg","Content-Type","application/json","xi-api-key","sk_b8c5c4e5f8a9d2c1e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"],e,e)
 c=t.K
 s=7
-return A.R(A.aP5(f,B.ca.S_(A.ar(["text",a1,"model_id","eleven_turbo_v2_5","voice_settings",A.ar(["stability",0.75,"similarity_boost",0.85,"style",0.2,"use_speaker_boost",!0],e,c)],e,c),null),d),$async$fX)
+return A.R(A.aP5(f,B.ca.S_(A.ar(["text",a1,"model_id","eleven_multilingual_v2","voice_settings",A.ar(["stability",0.75,"similarity_boost",0.85,"style",0.2,"use_speaker_boost",!0],e,c)],e,c),null),d),$async$fX)
 case 7:m=a3
 s=m.b===200?8:9
 break

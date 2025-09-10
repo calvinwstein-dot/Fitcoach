@@ -1,13 +1,11 @@
 // lib/main.dart
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:html' as html;
 
@@ -122,16 +120,41 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
 
   Future<void> _speak(String text) async {
     try {
-      // Try ElevenLabs TTS server first (using the original working format)
+      // Try ElevenLabs TTS server first
       if (_serverUrl.isNotEmpty) {
         final uri = Uri.parse('$_serverUrl/tts?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice');
         
-        print('Attempting TTS with URL: $uri'); // Debug log
+        print('🔊 Attempting ElevenLabs TTS: $uri');
         
+        // Stop any current playback
         await _player.stop();
-        await _player.play(UrlSource(uri.toString()));
         
-        // Show success feedback with voice name
+        // Set player mode for web streaming
+        await _player.setReleaseMode(ReleaseMode.stop);
+        await _player.setPlayerMode(PlayerMode.mediaPlayer);
+        
+        // Try HTML5 audio first for better web compatibility
+        try {
+          final audioElement = html.AudioElement(uri.toString());
+          audioElement.crossOrigin = 'anonymous';
+          audioElement.preload = 'auto';
+          
+          // Wait for audio to load
+          await audioElement.onCanPlay.first.timeout(const Duration(seconds: 5));
+          
+          // Play the audio
+          await audioElement.play();
+          
+          print('✅ HTML5 audio playing successfully');
+        } catch (htmlError) {
+          print('⚠️ HTML5 audio failed: $htmlError, trying AudioPlayer...');
+          
+          // Fallback to AudioPlayer
+          await _player.play(UrlSource(uri.toString()));
+          print('🎵 AudioPlayer fallback used');
+        }
+        
+        // Show success feedback
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -144,11 +167,11 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
         return;
       }
     } catch (e) {
-      print('ElevenLabs TTS failed: $e');
+      print('❌ ElevenLabs TTS failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('⚠️ ElevenLabs server unavailable, using browser TTS'),
+            content: Text('⚠️ ElevenLabs failed: $e. Using browser TTS...'),
             backgroundColor: Colors.orange.withOpacity(0.8),
             duration: const Duration(seconds: 2),
           ),
@@ -158,14 +181,14 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
     
     // Fallback to browser's built-in speech synthesis
     try {
+      print('🔄 Falling back to browser TTS');
       await _speakWithBrowserTTS(text);
     } catch (e) {
-      print('Browser TTS failed: $e');
-      // Show user feedback
+      print('❌ Browser TTS failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ Audio not available: $e'),
+            content: Text('❌ All audio failed: $e'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 2),
           ),
@@ -182,8 +205,21 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
         
         print('Testing ElevenLabs with: $testUri');
         
-        await _player.stop();
-        await _player.play(UrlSource(testUri.toString()));
+        // Test with HTML5 audio for better web compatibility
+        try {
+          final audioElement = html.AudioElement(testUri.toString());
+          audioElement.crossOrigin = 'anonymous';
+          audioElement.preload = 'auto';
+          
+          await audioElement.onCanPlay.first.timeout(const Duration(seconds: 5));
+          await audioElement.play();
+          
+          print('✅ ElevenLabs test successful with HTML5 audio');
+        } catch (htmlError) {
+          print('⚠️ HTML5 test failed: $htmlError, trying AudioPlayer...');
+          await _player.stop();
+          await _player.play(UrlSource(testUri.toString()));
+        }
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

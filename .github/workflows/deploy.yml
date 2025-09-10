@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  
-  REPO_NAME: fitcoach
+  REPO_NAME: Fitcoach         # <-- your repo name (case-sensitive)
+  WORKDIR: fitcoach           # <-- path to the Flutter project folder in the repo
 
 jobs:
   build:
@@ -30,17 +30,17 @@ jobs:
           channel: stable
 
       - name: Install dependencies
+        working-directory: ${{ env.WORKDIR }}
         run: flutter pub get
 
-      # IMPORTANT: base-href must match your repo name to avoid 404 on Pages
       - name: Build web (release)
+        working-directory: ${{ env.WORKDIR }}
         run: flutter build web --release --base-href "/${{ env.REPO_NAME }}/"
 
-      # Upload for GitHub Pages (uses the current, non-deprecated action)
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: build/web
+          path: ${{ env.WORKDIR }}/build/web
 
   deploy:
     needs: build

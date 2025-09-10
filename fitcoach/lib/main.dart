@@ -122,10 +122,11 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
 
   Future<void> _speak(String text) async {
     try {
-      // Always try ElevenLabs TTS first for realistic human voices
+      // Try ElevenLabs TTS server first (using the original working format)
       if (_serverUrl.isNotEmpty) {
-        // Use the selected voice ID directly in the URL for ElevenLabs API
-        final uri = Uri.parse('$_serverUrl/tts?text=${Uri.encodeComponent(text)}&voice_id=$_selectedVoice&model_id=eleven_multilingual_v2&stability=0.75&similarity_boost=0.85&style=0.2&use_speaker_boost=true');
+        final uri = Uri.parse('$_serverUrl/tts?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice');
+        
+        print('Attempting TTS with URL: $uri'); // Debug log
         
         await _player.stop();
         await _player.play(UrlSource(uri.toString()));
@@ -134,7 +135,7 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('🔊 ${_voices[_selectedVoice]}: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
+              content: Text('🔊 ElevenLabs ${_voices[_selectedVoice]}: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
               backgroundColor: Colors.green.withOpacity(0.8),
               duration: const Duration(seconds: 2),
             ),
@@ -144,6 +145,15 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
       }
     } catch (e) {
       print('ElevenLabs TTS failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ ElevenLabs server unavailable, using browser TTS'),
+            backgroundColor: Colors.orange.withOpacity(0.8),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     }
     
     // Fallback to browser's built-in speech synthesis
@@ -155,8 +165,8 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Audio not available: $e'),
-            backgroundColor: Colors.orange,
+            content: Text('❌ Audio not available: $e'),
+            backgroundColor: Colors.red,
             duration: const Duration(seconds: 2),
           ),
         );
@@ -166,18 +176,52 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
 
   Future<void> _testAudio() async {
     try {
-      // Test browser speech synthesis
-      if (html.window.speechSynthesis != null) {
-        final voices = html.window.speechSynthesis!.getVoices();
-        final englishVoices = voices.where((v) => v.lang?.startsWith('en') == true).length;
+      // First test ElevenLabs server connection
+      if (_serverUrl.isNotEmpty) {
+        final testUri = Uri.parse('$_serverUrl/tts?text=${Uri.encodeComponent("Testing ElevenLabs connection with ${_voices[_selectedVoice]} voice")}&voice=$_selectedVoice');
         
-        await _speak("Audio test successful! Found $englishVoices English voices available.");
+        print('Testing ElevenLabs with: $testUri');
+        
+        await _player.stop();
+        await _player.play(UrlSource(testUri.toString()));
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('✅ Audio system working! Found $englishVoices English voices.'),
+              content: Text('✅ ElevenLabs ${_voices[_selectedVoice]} voice test successful!'),
               backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
+      }
+    } catch (e) {
+      print('ElevenLabs test failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ ElevenLabs server unavailable. Testing browser TTS...'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+    
+    // Fallback to browser TTS test
+    try {
+      if (html.window.speechSynthesis != null) {
+        final voices = html.window.speechSynthesis!.getVoices();
+        final englishVoices = voices.where((v) => v.lang?.startsWith('en') == true).length;
+        
+        await _speakWithBrowserTTS("Browser TTS test successful! Found $englishVoices English voices available.");
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ Browser TTS working! Found $englishVoices English voices.'),
+              backgroundColor: Colors.blue,
               duration: const Duration(seconds: 3),
             ),
           );
@@ -479,6 +523,8 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
                       decoration: InputDecoration(
                         hintText: 'Enter TTS server URL',
                         hintStyle: const TextStyle(color: Colors.white54),
+                        helperText: 'Default: ElevenLabs via Replit server',
+                        helperStyle: const TextStyle(color: Colors.white38, fontSize: 12),
                         filled: true,
                         fillColor: Colors.white.withOpacity(0.1),
                         border: OutlineInputBorder(
@@ -494,6 +540,23 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
                           borderSide: const BorderSide(color: Colors.blueAccent),
                         ),
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              _serverCtrl.text = 'https://63d0b674-9d16-478b-a272-e0513423bcfb-00-1pmi0mctu0qbh.janeway.replit.dev/';
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.purple.withOpacity(0.2),
+                              foregroundColor: Colors.purpleAccent,
+                            ),
+                            child: const Text('Reset Default'),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     Row(

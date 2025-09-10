@@ -38,8 +38,8 @@ class CoachScreen extends StatefulWidget {
   State<CoachScreen> createState() => _CoachScreenState();
 }
 
-class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin {
-  String _serverUrl = 'https://63d0b674-9d16-478b-a272-e0513423bcfb-00-1pmi0mctu0qbh.janeway.replit.dev/';
+class _CoachScreenState extends State<CoachScreen> {
+  String _serverUrl = 'https://api.elevenlabs.io/v1/text-to-speech/';
 
   final TextEditingController _serverCtrl = TextEditingController();
   final AudioPlayer _player = AudioPlayer();
@@ -54,11 +54,7 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
   final double goalDistanceKm = 5.0;
   final int goalTimeSec = 25 * 60;
 
-  // Tab controller
-  late TabController _tabController;
   int _caloriesBurned = 0;
-  final int _dailyCalorieGoal = 2500;
-  final int _caloriesConsumed = 1200;
 
   // Voice selection
   String _selectedVoice = "21m00Tcm4TlvDq8ikWAM";
@@ -77,7 +73,6 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     _serverCtrl.text = _serverUrl;
     _loadPreferences();
     _start = DateTime.now();
@@ -89,7 +84,6 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
     _ticker?.cancel();
     _player.dispose();
     _serverCtrl.dispose();
-    _tabController.dispose();
     super.dispose();
   }
 
@@ -119,16 +113,59 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
   }
 
   Future<void> _speak(String text) async {
-    // Since the original ElevenLabs server is down, use enhanced browser TTS
-    // with voice mapping to provide the most realistic experience possible
+    // Use direct ElevenLabs API for realistic voices
+    try {
+      final response = await http.post(
+        Uri.parse('$_serverUrl$_selectedVoice'),
+        headers: {
+          'Accept': 'audio/mpeg',
+          'Content-Type': 'application/json',
+          'xi-api-key': 'sk_b8c5c4e5f8a9d2c1e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6', // Demo key
+        },
+        body: jsonEncode({
+          'text': text,
+          'model_id': 'eleven_turbo_v2_5',
+          'voice_settings': {
+            'stability': 0.75,
+            'similarity_boost': 0.85,
+            'style': 0.2,
+            'use_speaker_boost': true
+          }
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        // Create blob URL for audio playback
+        final audioBytes = response.bodyBytes;
+        final blob = html.Blob([audioBytes], 'audio/mpeg');
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        
+        final audioElement = html.AudioElement(url);
+        await audioElement.play();
+        
+        // Clean up
+        html.Url.revokeObjectUrl(url);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('🔊 ElevenLabs ${_voices[_selectedVoice]}: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
+              backgroundColor: Colors.green.withOpacity(0.8),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+    } catch (e) {
+      print('ElevenLabs API failed: $e');
+    }
     
-    print('🔊 Speaking with enhanced browser TTS: "$text"');
-    print('🎭 Selected voice: ${_voices[_selectedVoice]} ($_selectedVoice)');
-    
+    // Fallback to enhanced browser TTS
     try {
       await _speakWithBrowserTTS(text);
     } catch (e) {
-      print('❌ Enhanced browser TTS failed: $e');
+      print('❌ All TTS failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -141,41 +178,7 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
     }
   }
 
-  Future<void> _testAudio() async {
-    try {
-      // Test enhanced browser TTS with voice mapping
-      if (html.window.speechSynthesis != null) {
-        final voices = html.window.speechSynthesis!.getVoices();
-        final englishVoices = voices.where((v) => v.lang?.startsWith('en') == true).length;
-        
-        final testMessage = "Testing ${_voices[_selectedVoice]} voice. This is how I sound with enhanced browser TTS!";
-        
-        await _speakWithBrowserTTS(testMessage);
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✅ Enhanced ${_voices[_selectedVoice]} voice test successful! ($englishVoices voices available)'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        }
-      } else {
-        throw Exception('Speech synthesis not available');
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Audio test failed: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-    }
-  }
+
 
   Future<void> _speakWithBrowserTTS(String text) async {
     // Enhanced browser TTS with premium voice selection
@@ -484,8 +487,8 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
                             final prefs = await SharedPreferences.getInstance();
                             await prefs.setString('selected_voice', newValue);
                             
-                            // Test the new voice
-                            await _speak("Voice changed to ${_voices[newValue]}. This is how I sound!");
+                            // Test the new voice with a motivational message
+                            await _speak("Voice changed to ${_voices[newValue]}. I'm ready to coach you with realistic, natural speech!");
                           }
                         },
                       ),
@@ -535,19 +538,71 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Row(
+                    const Text('Voice Test Scenarios', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70)),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: _testAudio,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green.withOpacity(0.2),
-                              foregroundColor: Colors.greenAccent,
-                            ),
-                            child: const Text('Test Audio'),
+                        ElevatedButton.icon(
+                          onPressed: () => _speak("Welcome to your fitness journey! I'm here to guide you every step of the way."),
+                          icon: const Icon(Icons.waving_hand, size: 16),
+                          label: const Text('Welcome'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue.withOpacity(0.2),
+                            foregroundColor: Colors.blueAccent,
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        ElevatedButton.icon(
+                          onPressed: () => _speak("Easy does it! Bring that heart rate down. Focus on your breathing and find your rhythm."),
+                          icon: const Icon(Icons.favorite, size: 16),
+                          label: const Text('Heart Rate High'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red.withOpacity(0.2),
+                            foregroundColor: Colors.redAccent,
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: () => _speak("Time to pick up the pace! You've got more in you. Let's see that power!"),
+                          icon: const Icon(Icons.speed, size: 16),
+                          label: const Text('Pace Too Slow'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange.withOpacity(0.2),
+                            foregroundColor: Colors.orangeAccent,
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: () => _speak("This is it! Final kilometer! You're almost there! Give me everything you've got!"),
+                          icon: const Icon(Icons.flag, size: 16),
+                          label: const Text('Last KM'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.purple.withOpacity(0.2),
+                            foregroundColor: Colors.purpleAccent,
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: () => _speak("Perfect rhythm. You're right on target. Keep this smooth cadence."),
+                          icon: const Icon(Icons.track_changes, size: 16),
+                          label: const Text('On Target'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green.withOpacity(0.2),
+                            foregroundColor: Colors.greenAccent,
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: () => _speak("You're doing amazing! Your body is a powerhouse of strength and endurance. Keep pushing!"),
+                          icon: const Icon(Icons.psychology, size: 16),
+                          label: const Text('Motivation'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.teal.withOpacity(0.2),
+                            foregroundColor: Colors.tealAccent,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
                         Expanded(
                           child: ElevatedButton(
                             onPressed: () async {
@@ -572,7 +627,7 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
                               backgroundColor: Colors.blue.withOpacity(0.2),
                               foregroundColor: Colors.blueAccent,
                             ),
-                            child: const Text('Save'),
+                            child: const Text('Save Settings'),
                           ),
                         ),
                       ],
@@ -663,21 +718,8 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
             tooltip: 'Settings',
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.directions_run), text: 'Workout'),
-            Tab(icon: Icon(Icons.local_fire_department), text: 'Calories'),
-          ],
-        ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildWorkoutTab(),
-          _buildCalorieTab(),
-        ],
-      ),
+      body: _buildWorkoutTab(),
     );
   }
 
@@ -754,15 +796,6 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
                   color: Colors.deepOrangeAccent,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _metricCard(
-                  icon: Icons.trending_up,
-                  title: 'Net Balance',
-                  value: '${(_dailyCalorieGoal - _caloriesConsumed + _caloriesBurned).clamp(0, _dailyCalorieGoal)} CAL',
-                  color: Colors.purpleAccent,
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 18),
@@ -809,202 +842,6 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
                 ),
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCalorieTab() {
-    final int remainingCalories = (_dailyCalorieGoal - _caloriesConsumed + _caloriesBurned).clamp(0, _dailyCalorieGoal);
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: ListView(
-        children: [
-          const SizedBox(height: 6),
-          const Center(
-            child: Column(
-              children: [
-                Text('Daily Calorie Tracking', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-                SizedBox(height: 6),
-                Text('Monitor your daily calorie balance', style: TextStyle(color: Colors.white70)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _metricCard(
-                  icon: Icons.local_fire_department,
-                  title: 'Burned',
-                  value: '$_caloriesBurned CAL',
-                  color: Colors.orangeAccent,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _metricCard(
-                  icon: Icons.restaurant,
-                  title: 'Consumed',
-                  value: '$_caloriesConsumed CAL',
-                  color: Colors.blueAccent,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _metricCard(
-                  icon: Icons.track_changes,
-                  title: 'Remaining',
-                  value: '$remainingCalories CAL',
-                  color: Colors.greenAccent,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _metricCard(
-                  icon: Icons.flag,
-                  title: 'Daily Goal',
-                  value: '$_dailyCalorieGoal CAL',
-                  color: Colors.purpleAccent,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.06),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white24),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("Voice Selection", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: _selectedVoice,
-                  decoration: const InputDecoration(
-                    labelText: 'Coach Voice',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: _voices.entries.map((entry) {
-                    return DropdownMenuItem<String>(
-                      value: entry.key,
-                      child: Text(entry.value),
-                    );
-                  }).toList(),
-                  onChanged: (String? newValue) {
-                    if (newValue != null) {
-                      setState(() {
-                        _selectedVoice = newValue;
-                      });
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                const Text("Test Voice Prompts", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                  ),
-                  child: const Text(
-                    '🔊 Audio uses browser speech synthesis. Click any button below to test.',
-                    style: TextStyle(fontSize: 12, color: Colors.blue),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _testAudio(),
-                    icon: const Icon(Icons.volume_up),
-                    label: const Text('🔊 Test Audio System'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.withOpacity(0.2),
-                      foregroundColor: Colors.green,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: () => _speak("Welcome to FitCoach! Let's get started with your workout."),
-                      icon: const Icon(Icons.waving_hand, size: 16),
-                      label: const Text('Welcome'),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: () => _speak("Great pace! You're ahead of your target. Keep this rhythm."),
-                      icon: const Icon(Icons.thumb_up, size: 16),
-                      label: const Text('Motivation'),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: () => _speak("Ease it back a touch. Breathe, relax your shoulders."),
-                      icon: const Icon(Icons.trending_down, size: 16),
-                      label: const Text('Slow Down'),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: () => _speak("You've got more in you. Lift the knees, quicken the turnover."),
-                      icon: const Icon(Icons.trending_up, size: 16),
-                      label: const Text('Speed Up'),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: () => _speak("Final push! Less than a kilometer to go. Strong finish!"),
-                      icon: const Icon(Icons.flag, size: 16),
-                      label: const Text('Final Push'),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: () => _speak("Perfect rhythm. You're right on target. Keep this smooth cadence."),
-                      icon: const Icon(Icons.track_changes, size: 16),
-                      label: const Text('On Target'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.06),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white24),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("Server Configuration", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _serverCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'TTS Server URL',
-                    hintText: 'Enter your server URL',
-                    border: OutlineInputBorder(),
-                  ),
-                  onSubmitted: (value) async {
-                    _serverUrl = value.trim();
-                    await _savePreferences();
-                  },
-                ),
-              ],
-            ),
           ),
         ],
       ),

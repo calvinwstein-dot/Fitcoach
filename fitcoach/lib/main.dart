@@ -39,7 +39,7 @@ class CoachScreen extends StatefulWidget {
 }
 
 class _CoachScreenState extends State<CoachScreen> {
-  String _serverUrl = '';
+  String _serverUrl = 'https://elevenlabs-tts-server.replit.app';
 
   final TextEditingController _serverCtrl = TextEditingController();
   final AudioPlayer _player = AudioPlayer();
@@ -103,6 +103,9 @@ class _CoachScreenState extends State<CoachScreen> {
         _serverUrl = savedUrl;
         _serverCtrl.text = savedUrl;
       });
+    } else {
+      // Set default server URL
+      _serverCtrl.text = _serverUrl;
     }
     
     if (savedVoice != null && _voices.containsKey(savedVoice)) {
@@ -120,28 +123,59 @@ class _CoachScreenState extends State<CoachScreen> {
         
         print('🔊 Attempting TTS: $uri');
         
-        // Use AudioPlayer for better web compatibility
-        await _player.stop();
-        await _player.play(UrlSource(uri.toString()));
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('🔊 ElevenLabs ${_voices[_selectedVoice]}: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
-              backgroundColor: Colors.green.withOpacity(0.8),
-              duration: const Duration(seconds: 2),
-            ),
-          );
+        // Try multiple audio approaches for better web compatibility
+        try {
+          // Method 1: HTML5 Audio Element (most reliable for web)
+          final audioElement = html.AudioElement();
+          audioElement.src = uri.toString();
+          audioElement.crossOrigin = 'anonymous';
+          
+          // Wait for audio to load
+          await audioElement.onCanPlay.first.timeout(const Duration(seconds: 10));
+          
+          // Play the audio
+          await audioElement.play();
+          
+          print('✅ HTML5 audio playing successfully');
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('🔊 ElevenLabs ${_voices[_selectedVoice]}: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
+                backgroundColor: Colors.green.withOpacity(0.8),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+          return;
+          
+        } catch (htmlError) {
+          print('HTML5 audio failed: $htmlError, trying AudioPlayer...');
+          
+          // Method 2: AudioPlayer fallback
+          await _player.stop();
+          await _player.play(UrlSource(uri.toString()));
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('🔊 ElevenLabs ${_voices[_selectedVoice]}: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
+                backgroundColor: Colors.green.withOpacity(0.8),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+          return;
         }
-        return;
+        
       } catch (e) {
         print('TTS Server failed: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('⚠️ TTS server failed, using browser TTS'),
+              content: Text('⚠️ TTS server failed: $e. Using browser TTS...'),
               backgroundColor: Colors.orange.withOpacity(0.8),
-              duration: const Duration(seconds: 2),
+              duration: const Duration(seconds: 3),
             ),
           );
         }
@@ -156,7 +190,7 @@ class _CoachScreenState extends State<CoachScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ Speech synthesis failed: $e'),
+            content: Text('❌ All audio failed: $e'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 2),
           ),

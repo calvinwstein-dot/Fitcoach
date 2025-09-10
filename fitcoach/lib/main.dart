@@ -40,8 +40,10 @@ class CoachScreen extends StatefulWidget {
 
 class _CoachScreenState extends State<CoachScreen> {
   String _serverUrl = 'https://api.elevenlabs.io/v1/text-to-speech/';
+  String _elevenLabsApiKey = '';
 
   final TextEditingController _serverCtrl = TextEditingController();
+  final TextEditingController _apiKeyCtrl = TextEditingController();
   final AudioPlayer _player = AudioPlayer();
   final Random _rng = Random();
 
@@ -84,6 +86,7 @@ class _CoachScreenState extends State<CoachScreen> {
     _ticker?.cancel();
     _player.dispose();
     _serverCtrl.dispose();
+    _apiKeyCtrl.dispose();
     super.dispose();
   }
 
@@ -91,12 +94,14 @@ class _CoachScreenState extends State<CoachScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('server_url', _serverUrl);
     await prefs.setString('selected_voice', _selectedVoice);
+    await prefs.setString('elevenlabs_api_key', _elevenLabsApiKey);
   }
 
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     final savedUrl = prefs.getString('server_url');
     final savedVoice = prefs.getString('selected_voice');
+    final savedApiKey = prefs.getString('elevenlabs_api_key');
     
     if (savedUrl != null) {
       setState(() {
@@ -110,62 +115,73 @@ class _CoachScreenState extends State<CoachScreen> {
         _selectedVoice = savedVoice;
       });
     }
+    
+    if (savedApiKey != null) {
+      setState(() {
+        _elevenLabsApiKey = savedApiKey;
+        _apiKeyCtrl.text = savedApiKey;
+      });
+    }
   }
 
   Future<void> _speak(String text) async {
-    // Use direct ElevenLabs API for realistic voices
-    try {
-      final response = await http.post(
-        Uri.parse('$_serverUrl$_selectedVoice'),
-        headers: {
-          'Accept': 'audio/mpeg',
-          'Content-Type': 'application/json',
-          'xi-api-key': 'sk_b8c5c4e5f8a9d2c1e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6', // Demo key
-        },
-        body: jsonEncode({
-          'text': text,
-          'model_id': 'eleven_multilingual_v2',
-          'voice_settings': {
-            'stability': 0.75,
-            'similarity_boost': 0.85,
-            'style': 0.2,
-            'use_speaker_boost': true
-          }
-        }),
-      );
+    // Try ElevenLabs API first if API key is provided
+    if (_elevenLabsApiKey.isNotEmpty) {
+      try {
+        final response = await http.post(
+          Uri.parse('$_serverUrl$_selectedVoice'),
+          headers: {
+            'Accept': 'audio/mpeg',
+            'Content-Type': 'application/json',
+            'xi-api-key': _elevenLabsApiKey,
+          },
+          body: jsonEncode({
+            'text': text,
+            'model_id': 'eleven_multilingual_v2',
+            'voice_settings': {
+              'stability': 0.75,
+              'similarity_boost': 0.85,
+              'style': 0.2,
+              'use_speaker_boost': true
+            }
+          }),
+        );
 
-      if (response.statusCode == 200) {
-        // Create blob URL for audio playback
-        final audioBytes = response.bodyBytes;
-        final blob = html.Blob([audioBytes], 'audio/mpeg');
-        final url = html.Url.createObjectUrlFromBlob(blob);
-        
-        final audioElement = html.AudioElement(url);
-        await audioElement.play();
-        
-        // Clean up
-        html.Url.revokeObjectUrl(url);
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('🔊 ElevenLabs ${_voices[_selectedVoice]}: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
-              backgroundColor: Colors.green.withOpacity(0.8),
-              duration: const Duration(seconds: 2),
-            ),
-          );
+        if (response.statusCode == 200) {
+          // Create blob URL for audio playback
+          final audioBytes = response.bodyBytes;
+          final blob = html.Blob([audioBytes], 'audio/mpeg');
+          final url = html.Url.createObjectUrlFromBlob(blob);
+          
+          final audioElement = html.AudioElement(url);
+          await audioElement.play();
+          
+          // Clean up
+          html.Url.revokeObjectUrl(url);
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('🔊 ElevenLabs ${_voices[_selectedVoice]}: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
+                backgroundColor: Colors.green.withOpacity(0.8),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+          return;
+        } else {
+          print('ElevenLabs API error: ${response.statusCode} - ${response.body}');
         }
-        return;
+      } catch (e) {
+        print('ElevenLabs API failed: $e');
       }
-    } catch (e) {
-      print('ElevenLabs API failed: $e');
     }
     
     // Fallback to enhanced browser TTS
     try {
       await _speakWithBrowserTTS(text);
     } catch (e) {
-      print('❌ All TTS failed: $e');
+      print('❌ Speech synthesis failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -494,15 +510,16 @@ class _CoachScreenState extends State<CoachScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    const Text('TTS Server URL', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70)),
+                    const Text('ElevenLabs API Key', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70)),
                     const SizedBox(height: 8),
                     TextField(
-                      controller: _serverCtrl,
+                      controller: _apiKeyCtrl,
                       style: const TextStyle(color: Colors.white),
+                      obscureText: true,
                       decoration: InputDecoration(
-                        hintText: 'Enter TTS server URL',
+                        hintText: 'Enter your ElevenLabs API key',
                         hintStyle: const TextStyle(color: Colors.white54),
-                        helperText: 'Default: ElevenLabs via Replit server',
+                        helperText: 'Required for realistic ElevenLabs voices',
                         helperStyle: const TextStyle(color: Colors.white38, fontSize: 12),
                         filled: true,
                         fillColor: Colors.white.withOpacity(0.1),
@@ -519,23 +536,6 @@ class _CoachScreenState extends State<CoachScreen> {
                           borderSide: const BorderSide(color: Colors.blueAccent),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              _serverCtrl.text = 'https://63d0b674-9d16-478b-a272-e0513423bcfb-00-1pmi0mctu0qbh.janeway.replit.dev/';
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.purple.withOpacity(0.2),
-                              foregroundColor: Colors.purpleAccent,
-                            ),
-                            child: const Text('Reset Default'),
-                          ),
-                        ),
-                      ],
                     ),
                     const SizedBox(height: 16),
                     const Text('Voice Test Scenarios', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70)),
@@ -609,15 +609,18 @@ class _CoachScreenState extends State<CoachScreen> {
                               final prefs = await SharedPreferences.getInstance();
                               await prefs.setString('server_url', _serverCtrl.text);
                               await prefs.setString('selected_voice', _selectedVoice);
+                              await prefs.setString('elevenlabs_api_key', _apiKeyCtrl.text);
                               setState(() {
                                 _serverUrl = _serverCtrl.text;
+                                _elevenLabsApiKey = _apiKeyCtrl.text;
                               });
                               Navigator.of(context).pop();
                               
                               // Show confirmation
+                              final hasApiKey = _apiKeyCtrl.text.isNotEmpty;
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text('✅ Settings saved! Voice: ${_voices[_selectedVoice]}'),
+                                  content: Text('✅ Settings saved! Voice: ${_voices[_selectedVoice]} ${hasApiKey ? "(ElevenLabs)" : "(Browser TTS)"}'),
                                   backgroundColor: Colors.green.withOpacity(0.8),
                                   duration: const Duration(seconds: 2),
                                 ),

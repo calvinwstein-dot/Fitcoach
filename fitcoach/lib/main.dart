@@ -116,158 +116,16 @@ class _CoachScreenState extends State<CoachScreen> {
   }
 
   Future<void> _speak(String text) async {
-    print('🎤 _speak called with text: "$text"');
-    print('🌐 Server URL: $_serverUrl');
-    print('🎵 Selected voice: $_selectedVoice');
-    
-    // Try TTS server if URL is provided
-    if (_serverUrl.isNotEmpty) {
-      try {
-        final uri = Uri.parse('$_serverUrl/tts?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice');
-        
-        print('🔊 Attempting TTS: $uri');
-        
-        // Test server connectivity first
-        try {
-          print('🔍 Testing server connectivity...');
-          final response = await http.get(Uri.parse(_serverUrl)).timeout(const Duration(seconds: 5));
-          print('📡 Server response: ${response.statusCode}');
-          if (response.statusCode != 200) {
-            throw Exception('Server returned ${response.statusCode}');
-          }
-        } catch (connectError) {
-          print('❌ Server connectivity failed: $connectError');
-          throw connectError;
-        }
-        
-        // Try HTML5 Audio Element first
-        try {
-          print('🎵 Creating HTML5 Audio Element...');
-          final audioElement = html.AudioElement();
-          audioElement.crossOrigin = 'anonymous';
-          audioElement.preload = 'auto';
-          
-          // Set up comprehensive event listeners
-          bool audioLoaded = false;
-          bool audioError = false;
-          String errorMessage = '';
-          
-          audioElement.onCanPlay.listen((_) {
-            print('🎵 HTML5: Can play');
-            audioLoaded = true;
-          });
-          
-          audioElement.onEnded.listen((_) {
-            print('🎵 HTML5: Finished playing');
-          });
-          
-          audioElement.onError.listen((event) {
-            audioError = true;
-            errorMessage = 'HTML5 Audio Error: ${audioElement.error?.message ?? "Unknown error"}';
-            print('❌ $errorMessage');
-          });
-          
-          // Set source and try to play immediately
-          print('🎵 Setting audio source...');
-          audioElement.src = uri.toString();
-          
-          // Try direct play first (works if user has interacted)
-          try {
-            print('▶️ Attempting immediate play...');
-            await audioElement.play();
-            print('✅ Immediate play successful');
-          } catch (playError) {
-            print('⏳ Immediate play failed, waiting for canplay event...');
-            
-            // Wait for audio to be ready
-            int attempts = 0;
-            while (!audioLoaded && !audioError && attempts < 30) {
-              await Future.delayed(const Duration(milliseconds: 200));
-              attempts++;
-            }
-            
-            if (audioError) {
-              throw Exception(errorMessage);
-            }
-            
-            if (!audioLoaded) {
-              throw Exception('Audio load timeout after 6 seconds');
-            }
-            
-            // Play the audio after loading
-            print('▶️ Playing HTML5 audio after load...');
-            await audioElement.play();
-          }
-          
-          print('✅ HTML5 audio started successfully');
-          
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('🔊 ElevenLabs ${_voices[_selectedVoice]}: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
-                backgroundColor: Colors.green.withOpacity(0.8),
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          }
-          return;
-          
-        } catch (htmlError) {
-          print('❌ HTML5 audio failed: $htmlError');
-          print('🔄 Trying AudioPlayer fallback...');
-          
-          // Method 2: AudioPlayer fallback
-          try {
-            await _player.stop();
-            print('🎵 AudioPlayer: Playing URL...');
-            await _player.play(UrlSource(uri.toString()));
-            
-            print('✅ AudioPlayer started successfully');
-            
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('🔊 ElevenLabs ${_voices[_selectedVoice]}: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
-                  backgroundColor: Colors.green.withOpacity(0.8),
-                  duration: const Duration(seconds: 2),
-                ),
-              );
-            }
-            return;
-            
-          } catch (audioPlayerError) {
-            print('❌ AudioPlayer also failed: $audioPlayerError');
-            throw audioPlayerError;
-          }
-        }
-        
-      } catch (e) {
-        print('❌ TTS Server failed: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('⚠️ TTS server failed: $e. Using browser TTS...'),
-              backgroundColor: Colors.orange.withOpacity(0.8),
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        }
-      }
-    }
-    
-    // Fallback to enhanced browser TTS
-    print('🔄 Falling back to browser TTS...');
+    final uri = Uri.parse('$_serverUrl/tts.mp3?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice');
     try {
-      await _speakWithBrowserTTS(text);
+      await _player.stop();
+      await _player.setReleaseMode(ReleaseMode.stop);
+      // Important: call from a button onPressed (user gesture)
+      await _player.play(UrlSource(uri.toString()));
     } catch (e) {
-      print('❌ Browser TTS also failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ All audio failed: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 2),
-          ),
+          SnackBar(content: Text('TTS Error: $e')),
         );
       }
     }

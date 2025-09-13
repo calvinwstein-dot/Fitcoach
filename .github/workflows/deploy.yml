@@ -32,7 +32,7 @@ jobs:
 
       - name: Build web (release)
         working-directory: fitcoach
-        run: flutter build web --release --base-href "/Fitcoach/"
+        run: flutter build web --release --base-href="/Fitcoach/"
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

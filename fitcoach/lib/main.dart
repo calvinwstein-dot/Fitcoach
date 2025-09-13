@@ -143,12 +143,12 @@ class _CoachScreenState extends State<CoachScreen> {
       _audioElement?.remove();
       _audioElement = null;
       
-      // Create new HTML5 audio element
-      _audioElement = html.AudioElement();
+      // Create new HTML5 audio element with immediate source
+      _audioElement = html.AudioElement(ttsUrl);
       _audioElement!.crossOrigin = 'anonymous';
-      _audioElement!.preload = 'none';
+      _audioElement!.preload = 'auto';
       
-      // Set up event listeners
+      // Set up success event listener
       _audioElement!.onPlay.listen((_) {
         print('🎵 Audio started playing');
         if (mounted) {
@@ -162,6 +162,7 @@ class _CoachScreenState extends State<CoachScreen> {
         }
       });
       
+      // Set up error event listener
       _audioElement!.onError.listen((event) {
         final errorMsg = _audioElement!.error?.message ?? "Audio playback failed";
         print('❌ HTML5 Audio error: $errorMsg');
@@ -176,10 +177,9 @@ class _CoachScreenState extends State<CoachScreen> {
         }
       });
       
-      // Set source and play
-      _audioElement!.src = ttsUrl;
-      await _audioElement!.play();
-      print('✅ Audio play() called successfully');
+      // Play immediately - this MUST be synchronous with user gesture
+      _audioElement!.play();
+      print('✅ Audio play() called synchronously');
       
     } catch (e) {
       print('❌ TTS failed: $e');

@@ -176,93 +176,70 @@ class _CoachScreenState extends State<CoachScreen> {
   }
 
   Future<void> _speak(String text) async {
-    print('🎤 _speak called with: "$text"');
-    print('🌐 Server URL: $_serverUrl');
-    print('🎵 Selected voice: $_selectedVoice');
-    print('🔧 DEBUG: Forcing new deployment to fix audio issue');
-    
-    // Create the TTS URL - try .mp3 first, then fallback to regular /tts
-    final ttsUrl = '$_serverUrl/tts.mp3?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice';
-    final fallbackUrl = '$_serverUrl/tts?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice';
-    print('🔊 Primary TTS URL: $ttsUrl');
-    print('🔄 Fallback TTS URL: $fallbackUrl');
-    
-    try {
-      // Stop any existing audio
-      _audioElement?.pause();
-      _audioElement?.remove();
-      _audioElement = null;
-      
-      // Create and play audio immediately
-      _audioElement = html.AudioElement(ttsUrl);
-      _audioElement!.crossOrigin = 'anonymous';
-      
-      // Add event listeners for debugging
-      _audioElement!.onLoadedData.listen((_) => print('🎵 Audio loaded'));
-      _audioElement!.onCanPlay.listen((_) => print('🎵 Audio can play'));
-      _audioElement!.onPlay.listen((_) {
-        print('🎵 Audio started playing');
+    // Try TTS server if URL is provided
+    if (_serverUrl.isNotEmpty) {
+      try {
+        final uri = Uri.parse('$_serverUrl/tts?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice');
+        
+        print('🔊 Attempting TTS: $uri');
+        
+        // Try HTML5 Audio Element (most reliable for web)
+        try {
+          final audioElement = html.AudioElement();
+          audioElement.src = uri.toString();
+          audioElement.crossOrigin = 'anonymous';
+          
+          // Wait for audio to load
+          await audioElement.onCanPlay.first.timeout(const Duration(seconds: 10));
+          
+          // Play the audio
+          await audioElement.play();
+          
+          print('✅ HTML5 audio started successfully');
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('🔊 ElevenLabs ${_voices[_selectedVoice]}: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
+                backgroundColor: Colors.green.withOpacity(0.8),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+          return;
+          
+        } catch (htmlError) {
+          print('❌ HTML5 audio failed: $htmlError');
+          throw htmlError;
+        }
+        
+      } catch (e) {
+        print('❌ TTS Server failed: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('🔊 Playing: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 2),
+              content: Text('⚠️ TTS server failed: $e. Using browser TTS...'),
+              backgroundColor: Colors.orange.withOpacity(0.8),
+              duration: const Duration(seconds: 3),
             ),
           );
         }
-      });
-      _audioElement!.onEnded.listen((_) => print('🎵 Audio finished'));
-      _audioElement!.onError.listen((event) {
-        final error = _audioElement!.error;
-        print('❌ Primary audio failed: ${error?.message ?? "Unknown error"}');
-        print('🔄 Trying fallback URL...');
-        
-        // Try fallback URL
-        try {
-          _audioElement?.pause();
-          _audioElement?.remove();
-          _audioElement = html.AudioElement(fallbackUrl);
-          _audioElement!.crossOrigin = 'anonymous';
-          _audioElement!.onPlay.listen((_) {
-            print('🎵 Fallback audio started playing');
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('🔊 Playing (fallback): "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
-                  backgroundColor: Colors.orange,
-                  duration: const Duration(seconds: 2),
-                ),
-              );
-            }
-          });
-          _audioElement!.onError.listen((_) {
-            print('❌ Fallback also failed');
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('❌ Both audio endpoints failed'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
-          });
-          _audioElement!.play();
-        } catch (fallbackError) {
-          print('❌ Fallback exception: $fallbackError');
-        }
-      });
-      
-      // Play the audio
-      print('▶️ Calling play()...');
-      await _audioElement!.play();
-      print('✅ Play() completed');
-      
+      }
+    }
+    
+    // Fallback to enhanced browser TTS
+    print('🔄 Falling back to browser TTS...');
+    try {
+      await _speakWithBrowserTTS(text);
     } catch (e) {
-      print('❌ Exception in _speak: $e');
+      print('❌ Browser TTS also failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('TTS Error: $e')),
+          SnackBar(
+            content: Text('❌ All audio failed: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
         );
       }
     }

@@ -473,7 +473,8 @@ class _CoachScreenState extends State<CoachScreen> {
       final int elapsedMinutes = DateTime.now().difference(_start).inMinutes;
       _caloriesBurned = (elapsedMinutes * (heartRate / 150) * 8).round();
       
-      if (_rng.nextDouble() < 0.35) _autoCue();
+      // Auto-cue only if audio is unlocked and random chance
+      if (_audioUnlocked && _rng.nextDouble() < 0.35) _autoCue();
     });
   }
 

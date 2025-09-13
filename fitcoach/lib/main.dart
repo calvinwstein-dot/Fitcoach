@@ -179,10 +179,13 @@ class _CoachScreenState extends State<CoachScreen> {
     print('🎤 _speak called with: "$text"');
     print('🌐 Server URL: $_serverUrl');
     print('🎵 Selected voice: $_selectedVoice');
+    print('🔧 DEBUG: Forcing new deployment to fix audio issue');
     
-    // Create the TTS URL
+    // Create the TTS URL - try .mp3 first, then fallback to regular /tts
     final ttsUrl = '$_serverUrl/tts.mp3?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice';
-    print('🔊 Full TTS URL: $ttsUrl');
+    final fallbackUrl = '$_serverUrl/tts?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice';
+    print('🔊 Primary TTS URL: $ttsUrl');
+    print('🔄 Fallback TTS URL: $fallbackUrl');
     
     try {
       // Stop any existing audio
@@ -212,14 +215,41 @@ class _CoachScreenState extends State<CoachScreen> {
       _audioElement!.onEnded.listen((_) => print('🎵 Audio finished'));
       _audioElement!.onError.listen((event) {
         final error = _audioElement!.error;
-        print('❌ Audio error: ${error?.message ?? "Unknown error"}');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('❌ Audio error: ${error?.message ?? "Unknown error"}'),
-              backgroundColor: Colors.red,
-            ),
-          );
+        print('❌ Primary audio failed: ${error?.message ?? "Unknown error"}');
+        print('🔄 Trying fallback URL...');
+        
+        // Try fallback URL
+        try {
+          _audioElement?.pause();
+          _audioElement?.remove();
+          _audioElement = html.AudioElement(fallbackUrl);
+          _audioElement!.crossOrigin = 'anonymous';
+          _audioElement!.onPlay.listen((_) {
+            print('🎵 Fallback audio started playing');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('🔊 Playing (fallback): "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
+                  backgroundColor: Colors.orange,
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            }
+          });
+          _audioElement!.onError.listen((_) {
+            print('❌ Fallback also failed');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('❌ Both audio endpoints failed'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          });
+          _audioElement!.play();
+        } catch (fallbackError) {
+          print('❌ Fallback exception: $fallbackError');
         }
       });
       

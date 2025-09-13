@@ -37,11 +37,12 @@ class CoachScreen extends StatefulWidget {
 }
 
 class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin {
-  String _serverUrl = 'https://63d0b674-9d16-478b-a272-e0513423bcfb-00-1pmi0mctu0qbh.janeway.replit.dev/';
+  String _serverUrl = 'https://YOUR-REPLIT-SUBDOMAIN.replit.dev';
 
   final TextEditingController _serverCtrl = TextEditingController();
   final AudioPlayer _player = AudioPlayer();
   final Random _rng = Random();
+  bool _audioUnlocked = false;
 
   int heartRate = 140;
   double distanceKm = 2.7;
@@ -108,6 +109,8 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
   Future<void> _savePreferences() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('server_url', _serverUrl);
+    // save:
+    await prefs.setString('voice_id', _selectedVoice);
   }
 
   Future<void> _loadPreferences() async {
@@ -119,24 +122,52 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
         _serverCtrl.text = savedUrl;
       });
     }
+    // load:
+    final v = prefs.getString('voice_id');
+    if (v != null && _voices.containsKey(v)) {
+      setState(() => _selectedVoice = v);
+    }
   }
 
   Future<void> _speak(String text) async {
-    final uri = Uri.parse('$_serverUrl/tts?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice');
     try {
-      if (kIsWeb) {
-        // Web-specific audio handling
-        await _player.stop();
-        await _player.play(UrlSource(uri.toString()));
-      } else {
-        // Mobile/desktop audio handling
-        await _player.stop();
-        await _player.play(UrlSource(uri.toString()));
-      }
+      // Ensure first play happened after a user gesture
+      await _unlockAudio();
+
+      await _player.stop();
+      await Future.delayed(const Duration(milliseconds: 40)); // avoids WebKit race
+      final uri = Uri.parse(
+        '$_serverUrl/tts.mp3?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice',
+      );
+      await _player.setReleaseMode(ReleaseMode.stop);
+      await _player.play(UrlSource(uri.toString()));
     } catch (e) {
-      // Fallback for web compatibility
       if (kIsWeb) {
-        print('Audio playback failed on web: $e');
+        debugPrint('Audio playback failed: $e');
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('TTS Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _unlockAudio() async {
+    if (_audioUnlocked) return;
+    try {
+      // tiny utterance to satisfy iOS user-gesture requirement
+      final uri = Uri.parse('$_serverUrl/tts.mp3?text=%2E&voice=$_selectedVoice'); // "."
+      await _player.stop();
+      await _player.setReleaseMode(ReleaseMode.stop);
+      await _player.play(UrlSource(uri.toString())); // call from a button tap
+      _audioUnlocked = true;
+    } catch (_) {
+      // optional: show a hint
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('If audio doesn\'t start: tap Enable sound, or allow autoplay in Safari settings.')),
+        );
       }
     }
   }
@@ -177,7 +208,7 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
       final int elapsedMinutes = DateTime.now().difference(_start).inMinutes;
       _caloriesBurned = (elapsedMinutes * (heartRate / 150) * 8).round();
       
-      if (_rng.nextDouble() < 0.35) _autoCue();
+      if (_audioUnlocked && _rng.nextDouble() < 0.35) _autoCue();
     });
   }
 
@@ -453,6 +484,12 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                ElevatedButton.icon(
+                  onPressed: _unlockAudio,
+                  icon: const Icon(Icons.volume_up),
+                  label: const Text('Enable sound'),
+                ),
+                const SizedBox(height: 8),
                 const Text("Voice Selection", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
@@ -532,7 +569,8 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
                     border: OutlineInputBorder(),
                   ),
                   onSubmitted: (value) async {
-                    _serverUrl = value.trim();
+                    _serverUrl = value.trim().replaceFirst(RegExp(r'/*$'), ''); // remove trailing slashes
+                    _serverCtrl.text = _serverUrl;
                     await _savePreferences();
                   },
                 ),

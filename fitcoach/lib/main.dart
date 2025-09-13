@@ -133,88 +133,24 @@ class _CoachScreenState extends State<CoachScreen> {
       return;
     }
     
-    // Try multiple endpoints and parameter formats
-    final testConfigs = [
-      {'endpoint': '/tts.mp3', 'params': 'text=${Uri.encodeComponent(text)}&voice=$_selectedVoice'},
-      {'endpoint': '/tts', 'params': 'text=${Uri.encodeComponent(text)}&voice=$_selectedVoice'},
-      {'endpoint': '/tts.mp3', 'params': 'text=${Uri.encodeComponent(text)}&voiceId=$_selectedVoice'},
-      {'endpoint': '/tts', 'params': 'text=${Uri.encodeComponent(text)}&voiceId=$_selectedVoice'},
-      {'endpoint': '/tts.mp3', 'params': 'text=${Uri.encodeComponent(text)}'},
-      {'endpoint': '/tts', 'params': 'text=${Uri.encodeComponent(text)}'},
-    ];
-    Uri? workingUri;
-    
-    for (final config in testConfigs) {
-      final testUri = Uri.parse('${_serverUrl}${config['endpoint']}?${config['params']}');
-      print('🔊 Testing TTS config: $testUri');
-    
-      try {
-        print('🔍 Testing server response...');
-        final response = await http.get(testUri);
-        print('📡 Server response status: ${response.statusCode}');
-        print('📡 Server response headers: ${response.headers}');
-        
-        if (response.statusCode == 200) {
-          // Check if response is actually audio
-          final contentType = response.headers['content-type'] ?? '';
-          if (contentType.contains('audio') || contentType.contains('mpeg')) {
-            print('✅ Found working config: ${config['endpoint']}');
-            workingUri = testUri;
-            break;
-          } else {
-            print('❌ Config returned non-audio content: $contentType');
-            print('❌ Response body: ${response.body}');
-          }
-        } else {
-          print('❌ Config returned ${response.statusCode}: ${response.body}');
-        }
-        
-      } catch (configError) {
-        print('❌ Config ${config['endpoint']} failed: $configError');
-      }
-    }
-    
-    if (workingUri == null) {
-      print('❌ No working TTS endpoints found');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('❌ TTS Server: No working endpoints found'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 5),
-          ),
-        );
-      }
-      return;
-    }
-    
-    print('✅ Using working endpoint: $workingUri');
+    // Use the working TTS endpoint directly
+    final ttsUrl = '$_serverUrl/tts?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice';
+    print('🔊 TTS URL: $ttsUrl');
     
     try {
       // Stop any currently playing audio
       _audioElement?.pause();
+      _audioElement?.remove();
       _audioElement = null;
       
-      // Create new audio element
+      // Create new HTML5 audio element
       _audioElement = html.AudioElement();
       _audioElement!.crossOrigin = 'anonymous';
-      _audioElement!.preload = 'metadata';
+      _audioElement!.preload = 'none';
       
-      // Set up event listeners for debugging
-      _audioElement!.onLoadedData.listen((_) => print('🎵 Audio loaded'));
-      _audioElement!.onCanPlay.listen((_) => print('🎵 Audio can play'));
-      _audioElement!.onPlaying.listen((_) => print('🎵 Audio playing'));
-      _audioElement!.onEnded.listen((_) => print('🎵 Audio ended'));
-      _audioElement!.onError.listen((e) => print('❌ Audio error: $e'));
-      
-      // Set source and play
-      _audioElement!.src = workingUri.toString();
-      
-      // Use a promise-based approach for better error handling
-      try {
-        await _audioElement!.play();
-        print('✅ Audio playback started successfully');
-        
+      // Set up event listeners
+      _audioElement!.onPlay.listen((_) {
+        print('🎵 Audio started playing');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -224,43 +160,40 @@ class _CoachScreenState extends State<CoachScreen> {
             ),
           );
         }
-        
-      } catch (playError) {
-        print('❌ Play failed: $playError');
-        
-        // Fallback: Try with a small delay to ensure user gesture is recognized
-        await Future.delayed(const Duration(milliseconds: 100));
-        await _audioElement!.play();
-        print('✅ Audio playback started after delay');
-        
+      });
+      
+      _audioElement!.onError.listen((event) {
+        final errorMsg = _audioElement!.error?.message ?? "Audio playback failed";
+        print('❌ HTML5 Audio error: $errorMsg');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('🔊 Playing (delayed): "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
-              backgroundColor: Colors.orange.withOpacity(0.8),
-              duration: const Duration(seconds: 2),
+              content: Text('❌ Audio failed: $errorMsg'),
+              backgroundColor: Colors.red.withOpacity(0.8),
+              duration: const Duration(seconds: 3),
             ),
           );
         }
-      }
+      });
+      
+      // Set source and play
+      _audioElement!.src = ttsUrl;
+      await _audioElement!.play();
+      print('✅ Audio play() called successfully');
       
     } catch (e) {
-      print('❌ Audio completely failed: $e');
+      print('❌ TTS failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ Audio failed: ${e.toString()}'),
+            content: Text('❌ TTS Error: ${e.toString()}'),
             backgroundColor: Colors.red.withOpacity(0.8),
             duration: const Duration(seconds: 3),
           ),
         );
       }
     }
-  }
-
-
-
-  Future<void> _speakWithBrowserTTS(String text) async {
+  }  Future<void> _speakWithBrowserTTS(String text) async {
     // Enhanced browser TTS with premium voice selection
     if (html.window.speechSynthesis != null) {
       

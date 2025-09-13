@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 
 void main() => runApp(const FitCoachApp());
 
@@ -79,6 +80,20 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
     _loadPreferences();
     _start = DateTime.now();
     _ticker = Timer.periodic(const Duration(seconds: 2), (_) => _simulateTick());
+    
+    // Initialize audio player for web
+    if (kIsWeb) {
+      _initializeWebAudio();
+    }
+  }
+  
+  void _initializeWebAudio() async {
+    try {
+      // Set audio context for web
+      await _player.setPlayerMode(PlayerMode.lowLatency);
+    } catch (e) {
+      print('Web audio initialization failed: $e');
+    }
   }
 
   @override
@@ -109,10 +124,20 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
   Future<void> _speak(String text) async {
     final uri = Uri.parse('$_serverUrl/tts?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice');
     try {
-      await _player.stop();
-      await _player.play(UrlSource(uri.toString()));
-    } catch (_) {
-      // ignore playback errors in demo
+      if (kIsWeb) {
+        // Web-specific audio handling
+        await _player.stop();
+        await _player.play(UrlSource(uri.toString()));
+      } else {
+        // Mobile/desktop audio handling
+        await _player.stop();
+        await _player.play(UrlSource(uri.toString()));
+      }
+    } catch (e) {
+      // Fallback for web compatibility
+      if (kIsWeb) {
+        print('Audio playback failed on web: $e');
+      }
     }
   }
 

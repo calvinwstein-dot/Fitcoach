@@ -3,7 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:audioplayers/audioplayers.dart';
+
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
@@ -42,7 +42,7 @@ class _CoachScreenState extends State<CoachScreen> {
   String _serverUrl = 'https://63d0b674-9d16-478b-a272-e0513423bcfb-00-1pmi0mctu0qbh.janeway.replit.dev';
 
   final TextEditingController _serverCtrl = TextEditingController();
-  final AudioPlayer _player = AudioPlayer();
+
   final Random _rng = Random();
   
   // Global audio element for web compatibility
@@ -87,7 +87,7 @@ class _CoachScreenState extends State<CoachScreen> {
     _ticker?.cancel();
     _audioElement?.pause();
     _audioElement = null;
-    _player.dispose();
+
     _serverCtrl.dispose();
     super.dispose();
   }

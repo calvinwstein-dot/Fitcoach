@@ -1,9 +1,8 @@
-name: Build & Deploy Flutter Web
+name: Build & Deploy Flutter Web (Pages)
 
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -12,7 +11,11 @@ permissions:
 
 concurrency:
   group: "pages"
-  cancel-in-progress: false
+  cancel-in-progress: true
+
+env:
+  REPO_NAME: Fitcoach   # <-- must match your repo name exactly (case sensitive)
+  WORKDIR: fitcoach     # <-- folder that contains pubspec.yaml
 
 jobs:
   build:
@@ -26,22 +29,32 @@ jobs:
         with:
           channel: stable
 
-      - name: Install dependencies
-        working-directory: fitcoach
+      - name: Install deps
+        working-directory: ${{ env.WORKDIR }}
         run: flutter pub get
 
+      # Disable service worker to avoid white-screen-from-cache
       - name: Build web (release)
-        working-directory: fitcoach
-        run: flutter build web --release --base-href="/Fitcoach/"
+        working-directory: ${{ env.WORKDIR }}
+        run: flutter build web --release --base-href "/${{ env.REPO_NAME }}/" --pwa-strategy=none
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
+      # SPA 404 fix: make 404.html = index.html
+      - name: Create 404 fallback
+        working-directory: ${{ env.WORKDIR }}/build/web
+        run: cp index.html 404.html
 
-      - name: Upload artifact
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: fitcoach/build/web
+          path: ${{ env.WORKDIR }}/build/web
 
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

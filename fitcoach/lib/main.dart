@@ -146,12 +146,14 @@ class _CoachScreenState extends State<CoachScreen> {
         _audioUnlocked = true;
         print('✅ Audio context unlocked successfully');
         unlockAudio.remove(); // Clean up
+        if (mounted) setState(() {}); // Refresh UI to hide button
       });
       
       unlockAudio.onError.listen((_) {
         print('⚠️ Audio unlock failed, but continuing...');
         _audioUnlocked = true; // Try anyway
         unlockAudio.remove(); // Clean up
+        if (mounted) setState(() {}); // Refresh UI to hide button
       });
       
       // Mark as unlocked immediately for subsequent calls
@@ -659,16 +661,9 @@ class _CoachScreenState extends State<CoachScreen> {
                       const Text('Audio Setup', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70)),
                       const SizedBox(height: 8),
                       ElevatedButton.icon(
-                        onPressed: () async {
-                          await _unlockAudio();
-                          setState(() {}); // Refresh UI to hide this button
-                        },
-                        icon: const Icon(Icons.volume_up, size: 16),
-                        label: const Text('Enable Audio'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue.withOpacity(0.2),
-                          foregroundColor: Colors.blueAccent,
-                        ),
+                        onPressed: _unlockAudio,
+                        icon: const Icon(Icons.volume_up),
+                        label: const Text('Enable sound'),
                       ),
                       const SizedBox(height: 16),
                     ],

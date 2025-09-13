@@ -176,41 +176,27 @@ class _CoachScreenState extends State<CoachScreen> {
   }
 
   Future<void> _speak(String text) async {
-    print('🎤 _speak called with: "$text"');
-    
-    if (_serverUrl.isEmpty) {
-      print('❌ No server URL configured');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('❌ No TTS server configured')),
-        );
-      }
-      return;
-    }
-    
-    // Unlock audio context on first use
-    if (!_audioUnlocked) {
-      await _unlockAudio();
-    }
-    
-    // Use the working TTS endpoint directly
-    final ttsUrl = '$_serverUrl/tts?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice';
-    print('🔊 TTS URL: $ttsUrl');
-    
     try {
-      // Stop any currently playing audio
+      // Ensure the first play happened after a user gesture
+      await _unlockAudio();
+
+      // Small gap avoids WebKit race after stop()
       _audioElement?.pause();
       _audioElement?.remove();
       _audioElement = null;
-      
-      // Create new HTML5 audio element with immediate source
-      _audioElement = html.AudioElement(ttsUrl);
+      await Future.delayed(const Duration(milliseconds: 40));
+
+      final uri = Uri.parse(
+        '$_serverUrl/tts.mp3?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice',
+      );
+
+      // Create new HTML5 audio element (equivalent to setReleaseMode + play)
+      _audioElement = html.AudioElement(uri.toString());
       _audioElement!.crossOrigin = 'anonymous';
       _audioElement!.preload = 'auto';
       
-      // Set up success event listener
+      // Set up event listeners
       _audioElement!.onPlay.listen((_) {
-        print('🎵 Audio started playing');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -222,34 +208,21 @@ class _CoachScreenState extends State<CoachScreen> {
         }
       });
       
-      // Set up error event listener
       _audioElement!.onError.listen((event) {
         final errorMsg = _audioElement!.error?.message ?? "Audio playback failed";
-        print('❌ HTML5 Audio error: $errorMsg');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('❌ Audio failed: $errorMsg'),
-              backgroundColor: Colors.red.withOpacity(0.8),
-              duration: const Duration(seconds: 3),
-            ),
+            SnackBar(content: Text('❌ Audio failed: $errorMsg')),
           );
         }
       });
-      
-      // Play immediately - this MUST be synchronous with user gesture
-      _audioElement!.play();
-      print('✅ Audio play() called synchronously');
+
+      await _audioElement!.play();
       
     } catch (e) {
-      print('❌ TTS failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ TTS Error: ${e.toString()}'),
-            backgroundColor: Colors.red.withOpacity(0.8),
-            duration: const Duration(seconds: 3),
-          ),
+          SnackBar(content: Text('TTS Error: $e')),
         );
       }
     }

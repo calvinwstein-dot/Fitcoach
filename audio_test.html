@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Audio Test</title>
+</head>
+<body>
+    <h1>TTS Audio Test</h1>
+    <button onclick="testAudio()">Test Audio</button>
+    <div id="status"></div>
+    
+    <script>
+        async function testAudio() {
+            const status = document.getElementById('status');
+            const url = 'https://63d0b674-9d16-478b-a272-e0513423bcfb-00-1pmi0mctu0qbh.janeway.replit.dev/tts?text=Hello%20world&voice=21m00Tcm4TlvDq8ikWAM';
+            
+            status.innerHTML = 'Testing audio URL: ' + url + '<br>';
+            
+            try {
+                const audio = new Audio();
+                audio.crossOrigin = 'anonymous';
+                
+                audio.onloadstart = () => status.innerHTML += 'Loading started...<br>';
+                audio.oncanplay = () => status.innerHTML += 'Can play!<br>';
+                audio.onplay = () => status.innerHTML += 'Playing!<br>';
+                audio.onended = () => status.innerHTML += 'Finished!<br>';
+                audio.onerror = (e) => status.innerHTML += 'ERROR: ' + e.message + '<br>';
+                
+                audio.src = url;
+                await audio.play();
+                
+            } catch (error) {
+                status.innerHTML += 'EXCEPTION: ' + error.message + '<br>';
+            }
+        }
+    </script>
+</body>
+</html>

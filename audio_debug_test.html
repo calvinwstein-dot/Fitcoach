@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Audio Debug Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #1a1a1a; color: white; }
+        button { padding: 15px 25px; margin: 10px; font-size: 16px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #45a049; }
+        #log { background: #333; padding: 15px; margin: 15px 0; height: 500px; overflow-y: scroll; font-family: monospace; font-size: 12px; }
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+        .info { color: #2196F3; }
+        .warning { color: #ff9800; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Audio Debug Test</h1>
+    <p><strong>Server:</strong> https://63d0b674-9d16-478b-a272-e0513423bcfb-00-1pmi0mctu0qbh.janeway.replit.dev</p>
+    
+    <button onclick="testServerConnectivity()">1. Test Server</button>
+    <button onclick="testDirectURL()">2. Test Direct URL</button>
+    <button onclick="testHTML5Audio()">3. Test HTML5 Audio</button>
+    <button onclick="testWithCORS()">4. Test with CORS</button>
+    <button onclick="clearLog()">Clear Log</button>
+    
+    <div id="log"></div>
+    
+    <script>
+        const serverUrl = 'https://63d0b674-9d16-478b-a272-e0513423bcfb-00-1pmi0mctu0qbh.janeway.replit.dev';
+        const voiceId = '21m00Tcm4TlvDq8ikWAM';
+        
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
+            logDiv.innerHTML += `<span class="${className}">${timestamp}: ${message}</span><br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        async function testServerConnectivity() {
+            log('🔍 Testing server connectivity...', 'info');
+            try {
+                const response = await fetch(serverUrl);
+                const text = await response.text();
+                log(`✅ Server response (${response.status}): ${text}`, 'success');
+                
+                // Check CORS headers
+                log('📡 CORS Headers:', 'info');
+                response.headers.forEach((value, key) => {
+                    if (key.toLowerCase().includes('access-control')) {
+                        log(`   ${key}: ${value}`, 'info');
+                    }
+                });
+                
+            } catch (error) {
+                log(`❌ Server connectivity failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testDirectURL() {
+            const audioUrl = `${serverUrl}/tts?text=Direct%20URL%20test&voice=${voiceId}`;
+            log(`🔗 Testing direct URL: ${audioUrl}`, 'info');
+            
+            try {
+                const response = await fetch(audioUrl);
+                log(`📡 Response status: ${response.status}`, response.status === 200 ? 'success' : 'error');
+                log(`📡 Content-Type: ${response.headers.get('content-type')}`, 'info');
+                log(`📡 Content-Length: ${response.headers.get('content-length')} bytes`, 'info');
+                
+                if (response.status === 200) {
+                    const blob = await response.blob();
+                    log(`✅ Audio blob size: ${blob.size} bytes`, 'success');
+                    log(`✅ Audio blob type: ${blob.type}`, 'success');
+                } else {
+                    const text = await response.text();
+                    log(`❌ Error response: ${text}`, 'error');
+                }
+                
+            } catch (error) {
+                log(`❌ Direct URL test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testHTML5Audio() {
+            const audioUrl = `${serverUrl}/tts?text=HTML5%20Audio%20test&voice=${voiceId}`;
+            log(`🎵 Testing HTML5 Audio: ${audioUrl}`, 'info');
+            
+            try {
+                const audio = new Audio();
+                
+                // Set up comprehensive event listeners
+                audio.onloadstart = () => log('🎵 loadstart event', 'info');
+                audio.onloadedmetadata = () => log('🎵 loadedmetadata event', 'info');
+                audio.oncanplay = () => log('🎵 canplay event', 'success');
+                audio.oncanplaythrough = () => log('🎵 canplaythrough event', 'success');
+                audio.onplay = () => log('🎵 play event', 'success');
+                audio.onplaying = () => log('🎵 playing event', 'success');
+                audio.onended = () => log('🎵 ended event', 'info');
+                audio.onpause = () => log('🎵 pause event', 'info');
+                audio.onerror = (e) => {
+                    log(`❌ Audio error: ${audio.error?.message || 'Unknown error'}`, 'error');
+                    log(`❌ Error code: ${audio.error?.code}`, 'error');
+                };
+                
+                // Set properties
+                audio.crossOrigin = 'anonymous';
+                audio.preload = 'auto';
+                audio.src = audioUrl;
+                
+                log('⏳ Waiting for canplay event...', 'info');
+                
+                // Try to play
+                try {
+                    await audio.play();
+                    log('✅ Audio play() successful!', 'success');
+                } catch (playError) {
+                    log(`❌ Audio play() failed: ${playError.message}`, 'error');
+                }
+                
+            } catch (error) {
+                log(`❌ HTML5 Audio test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testWithCORS() {
+            const audioUrl = `${serverUrl}/tts?text=CORS%20test&voice=${voiceId}`;
+            log(`🌐 Testing CORS with fetch: ${audioUrl}`, 'info');
+            
+            try {
+                const response = await fetch(audioUrl, {
+                    method: 'GET',
+                    mode: 'cors',
+                    credentials: 'omit',
+                    headers: {
+                        'Accept': 'audio/mpeg'
+                    }
+                });
+                
+                log(`📡 CORS fetch status: ${response.status}`, response.status === 200 ? 'success' : 'error');
+                
+                if (response.status === 200) {
+                    const blob = await response.blob();
+                    const audioUrl = URL.createObjectURL(blob);
+                    
+                    const audio = new Audio(audioUrl);
+                    audio.oncanplay = () => log('🎵 Blob audio can play', 'success');
+                    audio.onerror = (e) => log(`❌ Blob audio error: ${audio.error?.message}`, 'error');
+                    
+                    try {
+                        await audio.play();
+                        log('✅ Blob audio playing!', 'success');
+                    } catch (playError) {
+                        log(`❌ Blob audio play failed: ${playError.message}`, 'error');
+                    }
+                    
+                    // Clean up
+                    setTimeout(() => URL.revokeObjectURL(audioUrl), 10000);
+                }
+                
+            } catch (error) {
+                log(`❌ CORS test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Auto-start basic test
+        window.onload = function() {
+            log('🚀 Audio Debug Test loaded', 'success');
+            log('📝 Click buttons in order: 1 → 2 → 3 → 4', 'info');
+            log('🎯 This will help identify the exact audio issue', 'info');
+        };
+    </script>
+</body>
+</html>

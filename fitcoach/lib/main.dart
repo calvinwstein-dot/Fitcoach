@@ -182,6 +182,7 @@ class _CoachScreenState extends State<CoachScreen> {
         final uri = Uri.parse('$_serverUrl/tts?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice');
         
         print('🔊 Attempting TTS: $uri');
+        print('🔧 Fixed base-href for GitHub Pages');
         
         // Try HTML5 Audio Element (most reliable for web)
         try {

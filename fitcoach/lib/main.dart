@@ -176,50 +176,60 @@ class _CoachScreenState extends State<CoachScreen> {
   }
 
   Future<void> _speak(String text) async {
+    print('🎤 _speak called with: "$text"');
+    print('🌐 Server URL: $_serverUrl');
+    print('🎵 Selected voice: $_selectedVoice');
+    
+    // Create the TTS URL
+    final ttsUrl = '$_serverUrl/tts.mp3?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice';
+    print('🔊 Full TTS URL: $ttsUrl');
+    
     try {
-      // Ensure the first play happened after a user gesture
-      await _unlockAudio();
-
-      // Small gap avoids WebKit race after stop()
+      // Stop any existing audio
       _audioElement?.pause();
       _audioElement?.remove();
       _audioElement = null;
-      await Future.delayed(const Duration(milliseconds: 40));
-
-      final uri = Uri.parse(
-        '$_serverUrl/tts.mp3?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice',
-      );
-
-      // Create new HTML5 audio element (equivalent to setReleaseMode + play)
-      _audioElement = html.AudioElement(uri.toString());
-      _audioElement!.crossOrigin = 'anonymous';
-      _audioElement!.preload = 'auto';
       
-      // Set up event listeners
+      // Create and play audio immediately
+      _audioElement = html.AudioElement(ttsUrl);
+      _audioElement!.crossOrigin = 'anonymous';
+      
+      // Add event listeners for debugging
+      _audioElement!.onLoadedData.listen((_) => print('🎵 Audio loaded'));
+      _audioElement!.onCanPlay.listen((_) => print('🎵 Audio can play'));
       _audioElement!.onPlay.listen((_) {
+        print('🎵 Audio started playing');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('🔊 Playing: "${text.length > 30 ? text.substring(0, 30) + '...' : text}"'),
-              backgroundColor: Colors.green.withOpacity(0.8),
+              backgroundColor: Colors.green,
               duration: const Duration(seconds: 2),
             ),
           );
         }
       });
-      
+      _audioElement!.onEnded.listen((_) => print('🎵 Audio finished'));
       _audioElement!.onError.listen((event) {
-        final errorMsg = _audioElement!.error?.message ?? "Audio playback failed";
+        final error = _audioElement!.error;
+        print('❌ Audio error: ${error?.message ?? "Unknown error"}');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('❌ Audio failed: $errorMsg')),
+            SnackBar(
+              content: Text('❌ Audio error: ${error?.message ?? "Unknown error"}'),
+              backgroundColor: Colors.red,
+            ),
           );
         }
       });
-
+      
+      // Play the audio
+      print('▶️ Calling play()...');
       await _audioElement!.play();
+      print('✅ Play() completed');
       
     } catch (e) {
+      print('❌ Exception in _speak: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('TTS Error: $e')),

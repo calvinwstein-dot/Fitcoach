@@ -47,6 +47,9 @@ class _CoachScreenState extends State<CoachScreen> {
   
   // Global audio element for web compatibility
   html.AudioElement? _audioElement;
+  
+  // Audio unlock state for browser autoplay restrictions
+  bool _audioUnlocked = false;
 
   int heartRate = 140;
   double distanceKm = 2.7;
@@ -120,6 +123,56 @@ class _CoachScreenState extends State<CoachScreen> {
     }
   }
 
+  Future<void> _unlockAudio() async {
+    if (_audioUnlocked) return;
+    
+    print('🔓 Attempting to unlock audio context...');
+    
+    try {
+      // Use a tiny utterance to "prime" WebAudio after a user gesture
+      final uri = Uri.parse('$_serverUrl/tts?text=%2E&voice=$_selectedVoice'); // "." minimal
+      
+      // Create a temporary audio element to unlock the context
+      final unlockAudio = html.AudioElement(uri.toString());
+      unlockAudio.crossOrigin = 'anonymous';
+      unlockAudio.preload = 'auto';
+      unlockAudio.volume = 0.01; // Very quiet for unlock
+      
+      // Play the unlock audio - this must be called from a user gesture
+      unlockAudio.play();
+      
+      // Set up listener to know when unlock is complete
+      unlockAudio.onEnded.listen((_) {
+        _audioUnlocked = true;
+        print('✅ Audio context unlocked successfully');
+        unlockAudio.remove(); // Clean up
+      });
+      
+      unlockAudio.onError.listen((_) {
+        print('⚠️ Audio unlock failed, but continuing...');
+        _audioUnlocked = true; // Try anyway
+        unlockAudio.remove(); // Clean up
+      });
+      
+      // Mark as unlocked immediately for subsequent calls
+      _audioUnlocked = true;
+      
+    } catch (e) {
+      print('⚠️ Audio unlock error: $e');
+      // Safari may still be blocking; show a hint
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('If audio doesn\'t start: Safari Settings → Auto-Play → Allow All'),
+            duration: Duration(seconds: 4),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      _audioUnlocked = true; // Try anyway
+    }
+  }
+
   Future<void> _speak(String text) async {
     print('🎤 _speak called with: "$text"');
     
@@ -131,6 +184,11 @@ class _CoachScreenState extends State<CoachScreen> {
         );
       }
       return;
+    }
+    
+    // Unlock audio context on first use
+    if (!_audioUnlocked) {
+      await _unlockAudio();
     }
     
     // Use the working TTS endpoint directly
@@ -597,6 +655,23 @@ class _CoachScreenState extends State<CoachScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
+                    if (!_audioUnlocked) ...[
+                      const Text('Audio Setup', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70)),
+                      const SizedBox(height: 8),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          await _unlockAudio();
+                          setState(() {}); // Refresh UI to hide this button
+                        },
+                        icon: const Icon(Icons.volume_up, size: 16),
+                        label: const Text('Enable Audio'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue.withOpacity(0.2),
+                          foregroundColor: Colors.blueAccent,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     const Text('Direct Audio Test', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white70)),
                     const SizedBox(height: 8),
                     ElevatedButton.icon(

@@ -142,29 +142,12 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
   }
 
   Future<void> _speak(String text) async {
+    final uri = Uri.parse('$_serverUrl/tts?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice');
     try {
-      await _unlockAudio();
       await _player.stop();
-      await Future.delayed(const Duration(milliseconds: 40));
-
-      final uri = Uri.parse('$_serverUrl/tts.mp3').replace(queryParameters: {
-        'text': text,
-        'voice': _selectedVoice,
-        'stability': _stability.toStringAsFixed(2),
-        'similarity': _similarity.toStringAsFixed(2),
-        'style': _style.toStringAsFixed(2),
-        'speaker_boost': _speakerBoost ? 'true' : 'false',
-      });
-
-      await _player.setReleaseMode(ReleaseMode.stop);
-      await _player.setVolume(_appVolume.clamp(0.0, 1.0));
       await _player.play(UrlSource(uri.toString()));
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('TTS Error: $e')),
-        );
-      }
+    } catch (_) {
+      // ignore playback errors in demo
     }
   }
 
@@ -223,7 +206,7 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
       final int elapsedMinutes = DateTime.now().difference(_start).inMinutes;
       _caloriesBurned = (elapsedMinutes * (heartRate / 150) * 8).round();
       
-      if (_audioUnlocked && _rng.nextDouble() < 0.35) _autoCue();
+      if (_rng.nextDouble() < 0.35) _autoCue();
     });
   }
 
@@ -357,20 +340,10 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
                 }),
 
                 const SizedBox(height: 16),
-                Row(
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: () => _speak("Hello! This is ${_voices[_selectedVoice]}. Let's run smart today."),
-                      icon: const Icon(Icons.volume_up),
-                      label: const Text('Test voice'),
-                    ),
-                    const SizedBox(width: 12),
-                    OutlinedButton.icon(
-                      onPressed: _unlockAudio, // your existing unlock
-                      icon: const Icon(Icons.lock_open),
-                      label: const Text('Enable sound'),
-                    ),
-                  ],
+                ElevatedButton.icon(
+                  onPressed: () => _speak("Hello! This is ${_voices[_selectedVoice]}. Let's run smart today."),
+                  icon: const Icon(Icons.volume_up),
+                  label: const Text('Test voice'),
                 ),
                 const SizedBox(height: 10),
               ],

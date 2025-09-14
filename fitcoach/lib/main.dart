@@ -142,7 +142,7 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
   }
 
   Future<void> _speak(String text) async {
-    final uri = Uri.parse('$_serverUrl/tts?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice');
+    final uri = Uri.parse('$_serverUrl/tts.mp3?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice');
     try {
       await _player.stop();
       await _player.play(UrlSource(uri.toString()));

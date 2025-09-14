@@ -37252,7 +37252,7 @@ return A.F($async$qx,r)},
 hL(a){return this.aaB(a)},
 aaB(a){var s=0,r=A.G(t.H),q=1,p,o=this,n,m,l,k
 var $async$hL=A.C(function(b,c){if(b===1){p=c
-s=q}while(true)switch(s){case 0:l=A.hV(o.d+"/tts?text="+A.tV(B.Gb,a,B.a0,!1)+"&voice="+o.dy,0,null)
+s=q}while(true)switch(s){case 0:l=A.hV(o.d+"/tts.mp3?text="+A.tV(B.Gb,a,B.a0,!1)+"&voice="+o.dy,0,null)
 q=3
 n=o.f
 s=6

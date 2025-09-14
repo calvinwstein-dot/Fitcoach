@@ -56,8 +56,6 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
   // Tab controller
   late TabController _tabController;
   int _caloriesBurned = 0;
-  final int _dailyCalorieGoal = 2500;
-  final int _caloriesConsumed = 1200;
 
   // TTS controls (persisted)
   double _stability = 0.45;         // less robotic if 0.3–0.6
@@ -82,7 +80,7 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 1, vsync: this);
     _serverCtrl.text = _serverUrl;
     _loadPreferences();
     _start = DateTime.now();
@@ -442,7 +440,6 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
           controller: _tabController,
           tabs: const [
             Tab(icon: Icon(Icons.directions_run), text: 'Workout'),
-            Tab(icon: Icon(Icons.local_fire_department), text: 'Calories'),
           ],
         ),
       ),
@@ -450,7 +447,6 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
         controller: _tabController,
         children: [
           _buildWorkoutTab(),
-          _buildCalorieTab(),
         ],
       ),
     );
@@ -545,175 +541,7 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
     );
   }
 
-  Widget _buildCalorieTab() {
-    final int remainingCalories = (_dailyCalorieGoal - _caloriesConsumed + _caloriesBurned).clamp(0, _dailyCalorieGoal);
 
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: ListView(
-        children: [
-          const SizedBox(height: 6),
-          const Center(
-            child: Column(
-              children: [
-                Text('Daily Calorie Tracking', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-                SizedBox(height: 6),
-                Text('Monitor your daily calorie balance', style: TextStyle(color: Colors.white70)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _metricCard(
-                  icon: Icons.local_fire_department,
-                  title: 'Burned',
-                  value: '$_caloriesBurned CAL',
-                  color: Colors.orangeAccent,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _metricCard(
-                  icon: Icons.restaurant,
-                  title: 'Consumed',
-                  value: '$_caloriesConsumed CAL',
-                  color: Colors.blueAccent,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _metricCard(
-                  icon: Icons.track_changes,
-                  title: 'Remaining',
-                  value: '$remainingCalories CAL',
-                  color: Colors.greenAccent,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _metricCard(
-                  icon: Icons.flag,
-                  title: 'Daily Goal',
-                  value: '$_dailyCalorieGoal CAL',
-                  color: Colors.purpleAccent,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.06),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white24),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: _unlockAudio,
-                  icon: const Icon(Icons.volume_up),
-                  label: const Text('Enable sound'),
-                ),
-                const SizedBox(height: 8),
-                const Text("Voice Selection", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: _selectedVoice,
-                  decoration: const InputDecoration(
-                    labelText: 'Coach Voice',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: _voices.entries.map((entry) {
-                    return DropdownMenuItem<String>(
-                      value: entry.key,
-                      child: Text(entry.value),
-                    );
-                  }).toList(),
-                  onChanged: (String? newValue) {
-                    if (newValue != null) {
-                      setState(() {
-                        _selectedVoice = newValue;
-                      });
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                const Text("Test Voice Prompts", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    ElevatedButton(
-                      onPressed: () => _speak("Welcome to FitCoach! Let's get started."),
-                      child: const Text('Welcome'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () => _speak("Great pace! Keep this rhythm."),
-                      child: const Text('Motivation'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () => _speak("Ease it back a touch. Breathe, relax."),
-                      child: const Text('Slow Down'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () => _speak("You've got more in you. Quicken the pace."),
-                      child: const Text('Speed Up'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () => _speak("Final push! Strong finish!"),
-                      child: const Text('Final Push'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () => _speak("Perfect rhythm. You're on target."),
-                      child: const Text('On Target'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.06),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white24),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text("Server Configuration", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _serverCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'TTS Server URL',
-                    hintText: 'Enter your server URL',
-                    border: OutlineInputBorder(),
-                  ),
-                  onSubmitted: (value) async {
-                    _serverUrl = value.trim().replaceFirst(RegExp(r'/*$'), ''); // remove trailing slashes
-                    _serverCtrl.text = _serverUrl;
-                    await _savePreferences();
-                  },
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _goalBar(String title, String subtitle, double pct) {
     return Column(

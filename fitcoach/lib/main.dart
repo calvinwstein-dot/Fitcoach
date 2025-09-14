@@ -37,7 +37,7 @@ class CoachScreen extends StatefulWidget {
 }
 
 class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin {
-  String _serverUrl = 'https://YOUR-REPLIT-SUBDOMAIN.replit.dev';
+  String _serverUrl = 'https://63d0b674-9d16-478b-a272-e0513423bcfb-00-1pmi0mctu0qbh.janeway.replit.dev';
 
   final TextEditingController _serverCtrl = TextEditingController();
   final AudioPlayer _player = AudioPlayer();
@@ -142,7 +142,7 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
   }
 
   Future<void> _speak(String text) async {
-    final uri = Uri.parse('$_serverUrl/tts.mp3?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice');
+    final uri = Uri.parse('$_serverUrl/tts?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice');
     try {
       await _player.stop();
       await _player.play(UrlSource(uri.toString()));
@@ -317,13 +317,7 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
 
                 const SizedBox(height: 16),
 
-                // Enable Sound Button
-                ElevatedButton.icon(
-                  onPressed: _unlockAudio,
-                  icon: const Icon(Icons.volume_up),
-                  label: const Text('Enable sound'),
-                ),
-                const SizedBox(height: 8),
+
 
                 // Test Voice
                 ElevatedButton.icon(

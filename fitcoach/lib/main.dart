@@ -186,7 +186,7 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
     } else {
       final remain = (goalDistanceKm - distanceKm).clamp(0.0, goalDistanceKm);
       if (remain <= 1.0) {
-        line = "Last kilometer—this is yours. Tall posture, eyes up, breathe and **go**. Strong to the line!";
+        line = "Last kilometer—this is yours. Tall posture, eyes up, breathe and go. Strong to the line!";
       } else if (onPace) {
         line = "Beautiful rhythm. You're right on plan—bank this feeling.";
       } else {

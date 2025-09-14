@@ -316,30 +316,6 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
                 ),
 
                 const SizedBox(height: 16),
-
-                // Emotion / naturalness
-                const Text('Voice Naturalness', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 6),
-                _sliderRow('Stability', _stability, (v) async { setState(() => _stability = v); await _savePreferences(); }),
-                _sliderRow('Similarity', _similarity, (v) async { setState(() => _similarity = v); await _savePreferences(); }),
-                _sliderRow('Style (expressive)', _style, (v) async { setState(() => _style = v); await _savePreferences(); }),
-
-                const SizedBox(height: 10),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Speaker boost (richer presence)'),
-                  value: _speakerBoost,
-                  onChanged: (v) async { setState(() => _speakerBoost = v); await _savePreferences(); },
-                ),
-
-                const SizedBox(height: 10),
-                _sliderRow('App volume', _appVolume, (v) async {
-                  setState(() => _appVolume = v);
-                  await _player.setVolume(v.clamp(0.0, 1.0));
-                  await _savePreferences();
-                }),
-
-                const SizedBox(height: 16),
                 Row(
                   children: [
                     ElevatedButton.icon(
@@ -394,22 +370,7 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
     );
   }
 
-  // small helper widget for sliders
-  Widget _sliderRow(String label, double value, ValueChanged<double> onChanged) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(label),
-            const Spacer(),
-            Text(value.toStringAsFixed(2), style: const TextStyle(color: Colors.white70)),
-          ],
-        ),
-        Slider(value: value, onChanged: onChanged),
-      ],
-    );
-  }
+
 
   @override
   Widget build(BuildContext context) {

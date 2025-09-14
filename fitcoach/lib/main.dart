@@ -340,10 +340,50 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
                 }),
 
                 const SizedBox(height: 16),
-                ElevatedButton.icon(
-                  onPressed: () => _speak("Hello! This is ${_voices[_selectedVoice]}. Let's run smart today."),
-                  icon: const Icon(Icons.volume_up),
-                  label: const Text('Test voice'),
+                Row(
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () => _speak("Hello! This is ${_voices[_selectedVoice]}. Let's run smart today."),
+                      icon: const Icon(Icons.volume_up),
+                      label: const Text('Test voice'),
+                    ),
+                    const SizedBox(width: 12),
+                    OutlinedButton.icon(
+                      onPressed: _unlockAudio,
+                      icon: const Icon(Icons.lock_open),
+                      label: const Text('Enable sound'),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+                const Text('Coaching Test Prompts', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () => _speak("Back it off 5%. Drop the shoulders, soft hands, long exhale—control wins the race."),
+                      child: const Text('Heart Rate High'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => _speak("You've got gears left. Quick feet, lift the chest—find that smooth, assertive rhythm."),
+                      child: const Text('Heart Rate Low'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => _speak("Last kilometer—this is yours. Tall posture, eyes up, breathe and go. Strong to the line!"),
+                      child: const Text('Final Push'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => _speak("Beautiful rhythm. You're right on plan—bank this feeling."),
+                      child: const Text('On Pace'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => _speak("Good work. Settle, breathe, and lock into the best sustainable pace you own."),
+                      child: const Text('General Advice'),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
               ],

@@ -316,20 +316,20 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
                 ),
 
                 const SizedBox(height: 16),
-                Row(
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: () => _speak("Hello! This is ${_voices[_selectedVoice]}. Let's run smart today."),
-                      icon: const Icon(Icons.volume_up),
-                      label: const Text('Test voice'),
-                    ),
-                    const SizedBox(width: 12),
-                    OutlinedButton.icon(
-                      onPressed: _unlockAudio,
-                      icon: const Icon(Icons.lock_open),
-                      label: const Text('Enable sound'),
-                    ),
-                  ],
+
+                // Enable Sound Button
+                ElevatedButton.icon(
+                  onPressed: _unlockAudio,
+                  icon: const Icon(Icons.volume_up),
+                  label: const Text('Enable sound'),
+                ),
+                const SizedBox(height: 8),
+
+                // Test Voice
+                ElevatedButton.icon(
+                  onPressed: () => _speak("Hello! This is ${_voices[_selectedVoice]}. Let's run smart today."),
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Test voice'),
                 ),
 
                 const SizedBox(height: 16),

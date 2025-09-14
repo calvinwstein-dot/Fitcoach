@@ -59,18 +59,24 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
   final int _dailyCalorieGoal = 2500;
   final int _caloriesConsumed = 1200;
 
+  // TTS controls (persisted)
+  double _stability = 0.45;         // less robotic if 0.3–0.6
+  double _similarity = 0.9;         // keep identity clear
+  double _style = 0.7;              // more expressive (0–1)
+  bool _speakerBoost = true;
+  double _appVolume = 0.9;          // 0–1
+
   // Voice selection
   String _selectedVoice = "21m00Tcm4TlvDq8ikWAM";
-  final Map<String, String> _voices = {
-    "21m00Tcm4TlvDq8ikWAM": "Rachel (Default)",
-    "AZnzlk1XvdvUeBnXmlld": "Domi",
-    "EXAVITQu4vr4xnSDxMaL": "Bella",
-    "ErXwobaYiN019PkySvjV": "Antoni",
-    "MF3mGyEYCl7XYWbV9V6O": "Elli",
-    "TxGEqnHWrfWFTfGW9XjX": "Josh",
-    "VR6AewLTigWG4xSOukaG": "Arnold",
-    "pNInz6obpgDQGcFmaJgB": "Adam",
-    "yoZ06aMxZJJ28mfd3POQ": "Sam",
+  
+  // 6 curated voices (3F/3M)
+  final Map<String, String> _voices = const {
+    "21m00Tcm4TlvDq8ikWAM": "Rachel (F)",
+    "AZnzlk1XvdvUeBnXmlld": "Domi (F)",
+    "EXAVITQu4vr4xnSDxMaL": "Bella (F)",
+    "TxGEqnHWrfWFTfGW9XjX": "Josh (M)",
+    "ErXwobaYiN019PkySvjV": "Antoni (M)",
+    "pNInz6obpgDQGcFmaJgB": "Adam (M)",
   };
 
   @override
@@ -109,42 +115,53 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
   Future<void> _savePreferences() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('server_url', _serverUrl);
-    // save:
     await prefs.setString('voice_id', _selectedVoice);
+    await prefs.setDouble('tts_stability', _stability);
+    await prefs.setDouble('tts_similarity', _similarity);
+    await prefs.setDouble('tts_style', _style);
+    await prefs.setBool('tts_speaker_boost', _speakerBoost);
+    await prefs.setDouble('app_volume', _appVolume);
   }
 
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     final savedUrl = prefs.getString('server_url');
     if (savedUrl != null) {
-      setState(() {
-        _serverUrl = savedUrl;
-        _serverCtrl.text = savedUrl;
-      });
+      _serverUrl = savedUrl;
     }
-    // load:
+    
     final v = prefs.getString('voice_id');
-    if (v != null && _voices.containsKey(v)) {
-      setState(() => _selectedVoice = v);
-    }
+    if (v != null && _voices.containsKey(v)) _selectedVoice = v;
+    _stability = prefs.getDouble('tts_stability') ?? _stability;
+    _similarity = prefs.getDouble('tts_similarity') ?? _similarity;
+    _style = prefs.getDouble('tts_style') ?? _style;
+    _speakerBoost = prefs.getBool('tts_speaker_boost') ?? _speakerBoost;
+    _appVolume = prefs.getDouble('app_volume') ?? _appVolume;
+    await _player.setVolume(_appVolume.clamp(0.0, 1.0));
+    setState(() {
+      _serverCtrl.text = _serverUrl; // keep your existing server URL load
+    });
   }
 
   Future<void> _speak(String text) async {
     try {
-      // Ensure first play happened after a user gesture
       await _unlockAudio();
-
       await _player.stop();
-      await Future.delayed(const Duration(milliseconds: 40)); // avoids WebKit race
-      final uri = Uri.parse(
-        '$_serverUrl/tts.mp3?text=${Uri.encodeComponent(text)}&voice=$_selectedVoice',
-      );
+      await Future.delayed(const Duration(milliseconds: 40));
+
+      final uri = Uri.parse('$_serverUrl/tts.mp3').replace(queryParameters: {
+        'text': text,
+        'voice': _selectedVoice,
+        'stability': _stability.toStringAsFixed(2),
+        'similarity': _similarity.toStringAsFixed(2),
+        'style': _style.toStringAsFixed(2),
+        'speaker_boost': _speakerBoost ? 'true' : 'false',
+      });
+
       await _player.setReleaseMode(ReleaseMode.stop);
+      await _player.setVolume(_appVolume.clamp(0.0, 1.0));
       await _player.play(UrlSource(uri.toString()));
     } catch (e) {
-      if (kIsWeb) {
-        debugPrint('Audio playback failed: $e');
-      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('TTS Error: $e')),
@@ -182,17 +199,17 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
 
     String line;
     if (high) {
-      line = "Ease it back a touch. Breathe, relax your shoulders—let's keep it controlled.";
+      line = "Back it off 5%. Drop the shoulders, soft hands, long exhale—control wins the race.";
     } else if (low && !onPace) {
-      line = "You've got more in you. Lift the knees, quicken the turnover—let's nudge the pace.";
+      line = "You've got gears left. Quick feet, lift the chest—find that smooth, assertive rhythm.";
     } else {
-      final double remain = (goalDistanceKm - distanceKm).clamp(0.0, goalDistanceKm);
+      final remain = (goalDistanceKm - distanceKm).clamp(0.0, goalDistanceKm);
       if (remain <= 1.0) {
-        line = "Final push! Less than a kilometer to go. Tall posture, strong finish—go!";
+        line = "Last kilometer—this is yours. Tall posture, eyes up, breathe and **go**. Strong to the line!";
       } else if (onPace) {
-        line = "Perfect rhythm. You're right on target—keep this smooth cadence.";
+        line = "Beautiful rhythm. You're right on plan—bank this feeling.";
       } else {
-        line = "Good work—lock into your breathing and settle into your best sustainable pace.";
+        line = "Good work. Settle, breathe, and lock into the best sustainable pace you own.";
       }
     }
     _speak(line);
@@ -251,6 +268,138 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
     );
   }
 
+  void _openSettings() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF121212),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16, right: 16,
+            top: 16,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text('Settings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+
+                // Server URL
+                const Text('TTS Server URL', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: _serverCtrl,
+                  decoration: const InputDecoration(
+                    hintText: 'https://your-tts.replit.dev',
+                    border: OutlineInputBorder(),
+                  ),
+                  onSubmitted: (value) async {
+                    _serverUrl = value.trim().replaceFirst(RegExp(r'/*$'), '');
+                    _serverCtrl.text = _serverUrl;
+                    await _savePreferences();
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                // Voice
+                const Text('Voice', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  value: _selectedVoice,
+                  isExpanded: true,
+                  items: _voices.entries.map((e) =>
+                    DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+                  onChanged: (v) async {
+                    if (v == null) return;
+                    setState(() => _selectedVoice = v);
+                    await _savePreferences();
+                  },
+                  decoration: const InputDecoration(border: OutlineInputBorder()),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Emotion / naturalness
+                const Text('Voice Naturalness', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                _sliderRow('Stability', _stability, (v) async { setState(() => _stability = v); await _savePreferences(); }),
+                _sliderRow('Similarity', _similarity, (v) async { setState(() => _similarity = v); await _savePreferences(); }),
+                _sliderRow('Style (expressive)', _style, (v) async { setState(() => _style = v); await _savePreferences(); }),
+
+                const SizedBox(height: 10),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Speaker boost (richer presence)'),
+                  value: _speakerBoost,
+                  onChanged: (v) async { setState(() => _speakerBoost = v); await _savePreferences(); },
+                ),
+
+                const SizedBox(height: 10),
+                _sliderRow('App volume', _appVolume, (v) async {
+                  setState(() => _appVolume = v);
+                  await _player.setVolume(v.clamp(0.0, 1.0));
+                  await _savePreferences();
+                }),
+
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () => _speak("Hello! This is ${_voices[_selectedVoice]}. Let's run smart today."),
+                      icon: const Icon(Icons.volume_up),
+                      label: const Text('Test voice'),
+                    ),
+                    const SizedBox(width: 12),
+                    OutlinedButton.icon(
+                      onPressed: _unlockAudio, // your existing unlock
+                      icon: const Icon(Icons.lock_open),
+                      label: const Text('Enable sound'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // small helper widget for sliders
+  Widget _sliderRow(String label, double value, ValueChanged<double> onChanged) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(label),
+            const Spacer(),
+            Text(value.toStringAsFixed(2), style: const TextStyle(color: Colors.white70)),
+          ],
+        ),
+        Slider(value: value, onChanged: onChanged),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -282,6 +431,13 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Settings',
+            icon: const Icon(Icons.settings),
+            onPressed: _openSettings,
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -319,47 +475,24 @@ class _CoachScreenState extends State<CoachScreen> with TickerProviderStateMixin
             ),
           ),
           const SizedBox(height: 16),
+          // Row 1: HR, Distance, Calories
           Row(
             children: [
-              Expanded(
-                child: _metricCard(
-                  icon: Icons.favorite,
-                  title: 'Heart Rate',
-                  value: '$heartRate BPM',
-                  color: Colors.redAccent,
-                ),
-              ),
+              Expanded(child: _metricCard(icon: Icons.favorite, title: 'Heart Rate', value: '$heartRate BPM', color: Colors.redAccent)),
               const SizedBox(width: 12),
-              Expanded(
-                child: _metricCard(
-                  icon: Icons.social_distance,
-                  title: 'Distance',
-                  value: '${distanceKm.toStringAsFixed(1)} KM',
-                  color: Colors.lightBlueAccent,
-                ),
-              ),
+              Expanded(child: _metricCard(icon: Icons.social_distance, title: 'Distance', value: '${distanceKm.toStringAsFixed(1)} KM', color: Colors.lightBlueAccent)),
+              const SizedBox(width: 12),
+              Expanded(child: _metricCard(icon: Icons.local_fire_department, title: 'Calories', value: '$_caloriesBurned CAL', color: Colors.deepOrangeAccent)),
             ],
           ),
           const SizedBox(height: 12),
+
+          // Row 2: Pace, Time
           Row(
             children: [
-              Expanded(
-                child: _metricCard(
-                  icon: Icons.speed,
-                  title: 'Pace',
-                  value: '${paceMinPerKm.toStringAsFixed(2)} MIN/KM',
-                  color: Colors.orangeAccent,
-                ),
-              ),
+              Expanded(child: _metricCard(icon: Icons.speed, title: 'Pace', value: '${paceMinPerKm.toStringAsFixed(2)} MIN/KM', color: Colors.orangeAccent)),
               const SizedBox(width: 12),
-              Expanded(
-                child: _metricCard(
-                  icon: Icons.timer,
-                  title: 'Time',
-                  value: _elapsedString(),
-                  color: Colors.greenAccent,
-                ),
-              ),
+              Expanded(child: _metricCard(icon: Icons.timer, title: 'Time', value: _elapsedString(), color: Colors.greenAccent)),
             ],
           ),
           const SizedBox(height: 18),
